@@ -9,7 +9,9 @@ const MEMBERS = [
   { id: '家族全員', name: '家族全員', color: '#FF7043', initial: '全' },
 ];
 
-const BASE_URL = `${location.protocol}//${location.hostname}:${location.port || 3000}`;
+const BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? `http://${location.hostname}:${location.port || 3000}`
+  : '';
 
 /* ===========================
    State
