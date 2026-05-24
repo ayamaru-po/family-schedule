@@ -396,6 +396,19 @@ input, textarea, select { font-family: inherit; }
 }
 .day-cell.sunday .day-num   { color: #E5556B; }
 .day-cell.saturday .day-num { color: #4A7CF7; }
+.day-cell.holiday .day-num  { color: #E5556B; }
+
+.holiday-label {
+  font-size: 9px;
+  color: #E5556B;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+  opacity: .85;
+}
 .day-cell.today .day-num {
   background: linear-gradient(135deg, #FFB347, #FF7EB3);
   color: white;
