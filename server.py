@@ -4,6 +4,7 @@
 使い方: python3 server.py
 """
 
+import cgi
 import json
 import os
 import uuid
@@ -141,7 +142,55 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.serve_static(path)
 
+    def handle_upload(self):
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in content_type:
+            self.send_json({'error': 'multipart required'}, 400)
+            return
+        fs = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={
+                'REQUEST_METHOD': 'POST',
+                'CONTENT_TYPE': content_type,
+                'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+            }
+        )
+        file_item = fs.get('file')
+        if not file_item or not hasattr(file_item, 'file'):
+            self.send_json({'error': 'No file'}, 400)
+            return
+        ext = 'jpg'
+        if file_item.filename and '.' in file_item.filename:
+            ext = file_item.filename.rsplit('.', 1)[-1].lower()
+        filename = f"{uuid.uuid4().hex}.{ext}"
+        file_data = file_item.file.read()
+        mime = file_item.type or 'image/jpeg'
+        # Supabase Storageにアップロード
+        storage_url = f"{SUPABASE_URL}/storage/v1/object/event-images/{filename}"
+        headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type': mime,
+            'Cache-Control': '3600',
+            'x-upsert': 'false',
+        }
+        req = urllib.request.Request(storage_url, data=file_data, headers=headers, method='POST')
+        try:
+            with urllib.request.urlopen(req) as resp:
+                resp.read()
+        except urllib.error.HTTPError as e:
+            body = e.read().decode('utf-8')
+            print(f"Storage error {e.code}: {body}")
+            self.send_json({'error': f'Upload failed: {body}'}, 500)
+            return
+        public_url = f"{SUPABASE_URL}/storage/v1/object/public/event-images/{filename}"
+        self.send_json({'url': public_url})
+
     def do_POST(self):
+        if self.path == '/api/upload':
+            self.handle_upload()
+            return
         if self.path != '/api/events':
             self.send_json({'error': 'Not found'}, 404)
             return

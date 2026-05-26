@@ -61,6 +61,8 @@ let activeFilters = new Set();
 let sse           = null;
 let sseTimer      = null;
 let selectedMembers = ['貴之']; // 複数対応
+let pendingImageFile = null;   // 選択済みだが未アップロードのファイル
+let currentImageUrl  = null;   // 保存済みまたは新規アップロードのURL
 
 /* ===========================
    Utilities
@@ -523,6 +525,52 @@ function updateDateDisplay() {
 /* ===========================
    Modal
    =========================== */
+/* ===========================
+   Image helpers
+   =========================== */
+function compressImage(file, maxWidth, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+    };
+    img.src = url;
+  });
+}
+
+async function uploadImageFile(file) {
+  const compressed = await compressImage(file, 1200, 0.8);
+  const fd = new FormData();
+  fd.append('file', compressed, 'photo.jpg');
+  const resp = await fetch(`${BASE_URL}/api/upload`, { method: 'POST', body: fd });
+  if (!resp.ok) throw new Error('画像のアップロードに失敗しました');
+  const data = await resp.json();
+  return data.url;
+}
+
+function showImagePreview(src) {
+  document.getElementById('imageUploadArea').style.display = 'none';
+  const wrap = document.getElementById('imagePreviewWrap');
+  wrap.style.display = '';
+  document.getElementById('imagePreviewEl').src = src;
+}
+
+function resetImageUI() {
+  pendingImageFile = null;
+  currentImageUrl  = null;
+  document.getElementById('imageUploadArea').style.display = '';
+  document.getElementById('imagePreviewWrap').style.display = 'none';
+  document.getElementById('imagePreviewEl').src = '';
+  document.getElementById('eventImage').value = '';
+}
+
 function openDetail(ev) {
   document.getElementById('modalTitle').textContent = '予定の詳細';
   document.getElementById('eventForm').style.display = 'none';
@@ -566,6 +614,15 @@ function openDetail(ev) {
     noteEl.style.display = 'none';
   }
 
+  // 写真
+  const imgWrap = document.getElementById('detailImageWrap');
+  if (ev.imageUrl) {
+    imgWrap.style.display = '';
+    document.getElementById('detailImageEl').src = ev.imageUrl;
+  } else {
+    imgWrap.style.display = 'none';
+  }
+
   // 編集ボタン
   document.getElementById('detailEditBtn').onclick = () => openEdit(ev);
   showModal();
@@ -573,6 +630,7 @@ function openDetail(ev) {
 
 function openAdd(dateStr) {
   editingId = null;
+  resetImageUI();
   document.getElementById('eventDetail').style.display = 'none';
   document.getElementById('eventForm').style.display = '';
   document.getElementById('modalTitle').textContent = '予定を追加';
@@ -590,6 +648,12 @@ function openAdd(dateStr) {
 
 function openEdit(ev) {
   editingId = ev.id;
+  // 画像状態をリセットしてから既存URLをセット
+  resetImageUI();
+  if (ev.imageUrl) {
+    currentImageUrl = ev.imageUrl;
+    showImagePreview(ev.imageUrl);
+  }
   document.getElementById('eventDetail').style.display = 'none';
   document.getElementById('eventForm').style.display = '';
   document.getElementById('modalTitle').textContent = '予定を編集';
@@ -615,6 +679,7 @@ function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
   document.getElementById('eventDetail').style.display = 'none';
   document.getElementById('eventForm').style.display = '';
+  resetImageUI();
 }
 
 /* ===========================
@@ -636,8 +701,14 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
 
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
-  saveBtn.textContent = '保存中...';
   try {
+    // 画像が選択されていればまずアップロード
+    if (pendingImageFile) {
+      saveBtn.textContent = '写真をアップロード中...';
+      currentImageUrl = await uploadImageFile(pendingImageFile);
+    }
+    data.imageUrl = currentImageUrl || null;
+    saveBtn.textContent = '保存中...';
     const saved = await saveEvent(data);
     if (editingId) {
       const i = events.findIndex(ev => ev.id === editingId);
@@ -686,6 +757,28 @@ document.getElementById('addEventBtn').addEventListener('click', () => openAdd()
 document.getElementById('modalClose').addEventListener('click', closeModal);
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('detailCloseBtn').addEventListener('click', closeModal);
+
+// 画像選択
+document.getElementById('imageUploadBtn').addEventListener('click', () => {
+  document.getElementById('eventImage').click();
+});
+document.getElementById('eventImage').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingImageFile = file;
+  currentImageUrl  = null;
+  const reader = new FileReader();
+  reader.onload = ev => showImagePreview(ev.target.result);
+  reader.readAsDataURL(file);
+});
+document.getElementById('imageRemoveBtn').addEventListener('click', () => {
+  resetImageUI();
+});
+
+// 詳細の写真タップで拡大
+document.getElementById('detailImageEl').addEventListener('click', function() {
+  this.classList.toggle('zoomed');
+});
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
