@@ -249,7 +249,7 @@ function renderCalendar() {
       const cs = chipStyle(ev);
       Object.assign(chip.style, cs);
       chip.textContent = (ev.startTime ? formatTime(ev.startTime) + ' ' : '') + ev.title;
-      chip.addEventListener('click', e => { e.stopPropagation(); openEdit(ev); });
+      chip.addEventListener('click', e => { e.stopPropagation(); openDetail(ev); });
       cell.appendChild(chip);
     });
     if (dayEvs.length > MAX) {
@@ -339,7 +339,7 @@ function renderDayEvents() {
     info.appendChild(meta);
     item.appendChild(bar);
     item.appendChild(info);
-    item.addEventListener('click', () => openEdit(ev));
+    item.addEventListener('click', () => openDetail(ev));
     container.appendChild(item);
   });
 }
@@ -384,7 +384,7 @@ function renderUpcoming() {
     item.appendChild(dot);
     item.appendChild(date);
     item.appendChild(t);
-    item.addEventListener('click', () => openEdit(ev));
+    item.addEventListener('click', () => openDetail(ev));
     container.appendChild(item);
   });
 }
@@ -523,8 +523,58 @@ function updateDateDisplay() {
 /* ===========================
    Modal
    =========================== */
+function openDetail(ev) {
+  document.getElementById('modalTitle').textContent = '予定の詳細';
+  document.getElementById('eventForm').style.display = 'none';
+  const detail = document.getElementById('eventDetail');
+  detail.style.display = '';
+
+  // メンバータグ
+  const membersEl = document.getElementById('detailMembers');
+  membersEl.innerHTML = '';
+  membersOf(ev).forEach(m => {
+    const tag = document.createElement('span');
+    tag.className = 'day-event-member-tag';
+    tag.style.background = colorOf(m);
+    tag.textContent = m;
+    membersEl.appendChild(tag);
+  });
+
+  // タイトル
+  document.getElementById('detailTitle').textContent = ev.title;
+
+  // 日付
+  let dateText = formatDateJP(ev.date);
+  if (ev.endDate && ev.endDate !== ev.date) dateText += ' 〜 ' + formatDateJP(ev.endDate);
+  document.getElementById('detailDate').textContent = '📅 ' + dateText;
+
+  // 時刻
+  const timeEl = document.getElementById('detailTime');
+  if (ev.startTime) {
+    timeEl.style.display = '';
+    timeEl.textContent = '🕐 ' + formatTime(ev.startTime) + (ev.endTime ? ' 〜 ' + formatTime(ev.endTime) : '');
+  } else {
+    timeEl.style.display = 'none';
+  }
+
+  // メモ
+  const noteEl = document.getElementById('detailNote');
+  if (ev.note) {
+    noteEl.style.display = '';
+    noteEl.textContent = '📝 ' + ev.note;
+  } else {
+    noteEl.style.display = 'none';
+  }
+
+  // 編集ボタン
+  document.getElementById('detailEditBtn').onclick = () => openEdit(ev);
+  showModal();
+}
+
 function openAdd(dateStr) {
   editingId = null;
+  document.getElementById('eventDetail').style.display = 'none';
+  document.getElementById('eventForm').style.display = '';
   document.getElementById('modalTitle').textContent = '予定を追加';
   document.getElementById('eventId').value = '';
   document.getElementById('eventTitle').value = '';
@@ -540,6 +590,8 @@ function openAdd(dateStr) {
 
 function openEdit(ev) {
   editingId = ev.id;
+  document.getElementById('eventDetail').style.display = 'none';
+  document.getElementById('eventForm').style.display = '';
   document.getElementById('modalTitle').textContent = '予定を編集';
   document.getElementById('eventId').value = ev.id;
   document.getElementById('eventTitle').value = ev.title;
@@ -561,6 +613,8 @@ function showModal() {
 
 function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
+  document.getElementById('eventDetail').style.display = 'none';
+  document.getElementById('eventForm').style.display = '';
 }
 
 /* ===========================
@@ -631,6 +685,7 @@ document.getElementById('todayBtn').addEventListener('click', () => {
 document.getElementById('addEventBtn').addEventListener('click', () => openAdd());
 document.getElementById('modalClose').addEventListener('click', closeModal);
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
+document.getElementById('detailCloseBtn').addEventListener('click', closeModal);
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });

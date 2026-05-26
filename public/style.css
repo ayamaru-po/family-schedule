@@ -583,6 +583,53 @@ input, textarea, select { font-family: inherit; }
 }
 .modal-close:hover { background: var(--surface-2); color: var(--text); }
 
+/* ===========================
+   Event Detail View
+   =========================== */
+.event-detail {
+  padding: 0 26px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.detail-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.detail-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-all;
+}
+.detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+}
+.detail-row {
+  font-size: 14px;
+  color: var(--text-2);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.detail-note {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
 .event-form { padding: 0 26px 26px; display: flex; flex-direction: column; gap: 16px; }
 
 .form-group { display: flex; flex-direction: column; gap: 6px; }
