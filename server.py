@@ -105,6 +105,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', types.get(ext, 'application/octet-stream') + '; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
+        # HTML は常に最新を取得、CSS/JS は1時間キャッシュ
+        if ext == '.html':
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+        else:
+            self.send_header('Cache-Control', 'public, max-age=3600')
         self.end_headers()
         self.wfile.write(body)
 
