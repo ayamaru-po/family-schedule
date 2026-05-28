@@ -481,6 +481,8 @@ function renderMemberOptions(selected) {
 
   const c = document.getElementById('memberSelect');
   c.innerHTML = '';
+
+  // 固定メンバー
   MEMBERS.forEach(m => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -502,7 +504,6 @@ function renderMemberOptions(selected) {
     btn.addEventListener('click', () => {
       const idx = selectedMembers.indexOf(m.id);
       if (idx >= 0) {
-        // 最低1人は必ず選択
         if (selectedMembers.length > 1) {
           selectedMembers.splice(idx, 1);
           btn.classList.remove('active');
@@ -514,6 +515,85 @@ function renderMemberOptions(selected) {
     });
     c.appendChild(btn);
   });
+
+  // カスタムメンバー（固定メンバー以外で選択済みのもの）
+  const fixedIds = MEMBERS.map(m => m.id);
+  const customMembers = selectedMembers.filter(id => !fixedIds.includes(id));
+  customMembers.forEach(id => renderCustomMemberChip(c, id));
+
+  // 「その他＋」ボタン
+  const otherWrap = document.createElement('div');
+  otherWrap.className = 'member-other-wrap';
+
+  const otherBtn = document.createElement('button');
+  otherBtn.type = 'button';
+  otherBtn.className = 'member-option member-other-btn';
+  otherBtn.innerHTML = '<div class="member-option-avatar" style="background:#9E9E9E">他</div><div class="member-option-name">その他</div>';
+  otherBtn.addEventListener('click', () => {
+    inp.style.display = '';
+    inp.focus();
+    otherBtn.style.display = 'none';
+  });
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'form-input member-other-input';
+  inp.placeholder = '名前を入力（例：おじいちゃん）';
+  inp.style.display = 'none';
+
+  const addCustom = () => {
+    const val = inp.value.trim();
+    if (val && !selectedMembers.includes(val)) {
+      selectedMembers.push(val);
+      renderCustomMemberChip(c, val, otherWrap);
+    }
+    inp.value = '';
+    inp.style.display = 'none';
+    otherBtn.style.display = '';
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } });
+  inp.addEventListener('blur', addCustom);
+
+  otherWrap.appendChild(otherBtn);
+  otherWrap.appendChild(inp);
+  c.appendChild(otherWrap);
+}
+
+function renderCustomMemberChip(container, id, before) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'member-option active';
+  btn.style.setProperty('--member-color', '#9E9E9E');
+
+  const av = document.createElement('div');
+  av.className = 'member-option-avatar';
+  av.style.background = '#9E9E9E';
+  av.textContent = id.slice(0, 1);
+
+  const name = document.createElement('div');
+  name.className = 'member-option-name';
+  name.textContent = id;
+
+  const rm = document.createElement('span');
+  rm.className = 'member-custom-remove';
+  rm.textContent = '✕';
+  rm.addEventListener('click', e => {
+    e.stopPropagation();
+    const idx = selectedMembers.indexOf(id);
+    if (idx >= 0 && selectedMembers.length > 1) {
+      selectedMembers.splice(idx, 1);
+      btn.remove();
+    }
+  });
+
+  btn.appendChild(av);
+  btn.appendChild(name);
+  btn.appendChild(rm);
+  if (before) {
+    container.insertBefore(btn, before);
+  } else {
+    container.appendChild(btn);
+  }
 }
 
 /* ===========================
