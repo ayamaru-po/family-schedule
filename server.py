@@ -4,7 +4,6 @@
 使い方: python3 server.py
 """
 
-import cgi
 import json
 import os
 import uuid
@@ -149,30 +148,58 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.serve_static(path)
 
+    def parse_multipart_file(self):
+        """cgiモジュールを使わずにmultipartを解析"""
+        content_type = self.headers.get('Content-Type', '')
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        # boundaryを取得
+        boundary = None
+        for part in content_type.split(';'):
+            part = part.strip()
+            if part.startswith('boundary='):
+                boundary = part[9:].strip('"')
+                break
+        if not boundary:
+            return None, None, None
+        sep = ('--' + boundary).encode()
+        parts = body.split(sep)
+        for part in parts[1:]:
+            if part.startswith(b'--'):
+                continue
+            if b'\r\n\r\n' not in part:
+                continue
+            headers_raw, file_data = part.split(b'\r\n\r\n', 1)
+            if file_data.endswith(b'\r\n'):
+                file_data = file_data[:-2]
+            headers_str = headers_raw.decode('utf-8', errors='replace')
+            filename = None
+            mime = 'image/jpeg'
+            for line in headers_str.split('\r\n'):
+                if 'Content-Disposition' in line and 'filename' in line:
+                    for item in line.split(';'):
+                        item = item.strip()
+                        if item.startswith('filename='):
+                            filename = item[9:].strip('"')
+                elif 'Content-Type' in line and ':' in line:
+                    mime = line.split(':', 1)[1].strip()
+            if filename is not None:
+                return filename, mime, file_data
+        return None, None, None
+
     def handle_upload(self):
         content_type = self.headers.get('Content-Type', '')
         if 'multipart/form-data' not in content_type:
             self.send_json({'error': 'multipart required'}, 400)
             return
-        fs = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': content_type,
-                'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
-            }
-        )
-        file_item = fs.get('file')
-        if not file_item or not hasattr(file_item, 'file'):
+        filename, mime, file_data = self.parse_multipart_file()
+        if file_data is None:
             self.send_json({'error': 'No file'}, 400)
             return
         ext = 'jpg'
-        if file_item.filename and '.' in file_item.filename:
-            ext = file_item.filename.rsplit('.', 1)[-1].lower()
+        if filename and '.' in filename:
+            ext = filename.rsplit('.', 1)[-1].lower()
         filename = f"{uuid.uuid4().hex}.{ext}"
-        file_data = file_item.file.read()
-        mime = file_item.type or 'image/jpeg'
         # Supabase Storageにアップロード
         storage_url = f"{SUPABASE_URL}/storage/v1/object/event-images/{filename}"
         headers = {
