@@ -61,6 +61,7 @@ let activeFilters = new Set();
 let sse           = null;
 let sseTimer      = null;
 let selectedMembers = ['貴之']; // 複数対応
+let viewMode = 'month'; // 'month' | 'week'
 let pendingImageFiles = [];    // 選択済みだが未アップロードのファイル群
 let currentImageUrls  = [];   // 保存済みまたは新規アップロードのURL群
 const MAX_IMAGES = 5;
@@ -189,12 +190,25 @@ function renderAll() {
 /* ===========================
    Render – calendar
    =========================== */
+function getWeekDates(base) {
+  const d = new Date(base);
+  d.setDate(d.getDate() - d.getDay()); // 週の日曜日
+  return Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(d);
+    dd.setDate(d.getDate() + i);
+    return dd;
+  });
+}
+
 function renderCalendar() {
+  if (viewMode === 'week') { renderWeekView(); return; }
+
   const y = currentDate.getFullYear();
   const m = currentDate.getMonth();
   document.getElementById('monthTitle').textContent = `${y}年 ${m+1}月`;
 
   const grid = document.getElementById('calendarGrid');
+  grid.className = 'calendar-grid';
   const headers = Array.from(grid.querySelectorAll('.day-header'));
   grid.innerHTML = '';
   headers.forEach(h => grid.appendChild(h));
@@ -269,6 +283,75 @@ function renderCalendar() {
       cell.classList.add('selected');
       updateDateDisplay();
       renderDayEvents();
+    });
+    grid.appendChild(cell);
+  });
+}
+
+function renderWeekView() {
+  const weekDates = getWeekDates(currentDate);
+  const first = weekDates[0], last = weekDates[6];
+  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+  document.getElementById('monthTitle').textContent =
+    `${first.getFullYear()}年 ${fmt(first)} 〜 ${fmt(last)}`;
+
+  const grid = document.getElementById('calendarGrid');
+  grid.className = 'calendar-grid week-view';
+  const headers = Array.from(grid.querySelectorAll('.day-header'));
+  grid.innerHTML = '';
+  headers.forEach(h => grid.appendChild(h));
+
+  const todayStr = toDateStr(new Date());
+  const vis = visible();
+
+  weekDates.forEach(d => {
+    const ds = toDateStr(d);
+    const dow = d.getDay();
+    const isHoliday = !!HOLIDAYS[ds];
+    const cls = ['day-cell', 'week-day-cell',
+      ds === todayStr    ? 'today'    : '',
+      ds === selectedDate? 'selected' : '',
+      dow === 0          ? 'sunday'   : '',
+      dow === 6          ? 'saturday' : '',
+      isHoliday          ? 'holiday'  : '',
+    ].filter(Boolean).join(' ');
+
+    const cell = document.createElement('div');
+    cell.className = cls;
+    cell.dataset.date = ds;
+
+    const num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = d.getDate();
+    cell.appendChild(num);
+
+    if (isHoliday) {
+      const hl = document.createElement('div');
+      hl.className = 'holiday-label';
+      hl.textContent = HOLIDAYS[ds];
+      cell.appendChild(hl);
+    }
+
+    // 週ビューは全件表示（上限なし）
+    const dayEvs = vis.filter(ev =>
+      ev.date === ds || (ev.endDate && ev.date <= ds && ev.endDate >= ds)
+    ).sort((a, b) => (a.startTime||'99').localeCompare(b.startTime||'99'));
+
+    dayEvs.forEach(ev => {
+      const chip = document.createElement('div');
+      chip.className = 'event-chip';
+      Object.assign(chip.style, chipStyle(ev));
+      chip.textContent = (ev.startTime ? formatTime(ev.startTime) + ' ' : '') + ev.title;
+      chip.addEventListener('click', e => { e.stopPropagation(); openDetail(ev); });
+      cell.appendChild(chip);
+    });
+
+    cell.addEventListener('click', () => {
+      selectedDate = ds;
+      updateDateDisplay();
+      renderDayEvents();
+      document.querySelectorAll('.day-cell').forEach(c =>
+        c.classList.toggle('selected', c.dataset.date === ds));
     });
     grid.appendChild(cell);
   });
@@ -856,11 +939,31 @@ document.getElementById('deleteEventBtn').addEventListener('click', async () => 
    Navigation listeners
    =========================== */
 document.getElementById('prevMonth').addEventListener('click', () => {
-  currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1);
+  if (viewMode === 'week') {
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 7);
+  } else {
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1);
+  }
   renderAll();
 });
 document.getElementById('nextMonth').addEventListener('click', () => {
-  currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1);
+  if (viewMode === 'week') {
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7);
+  } else {
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1);
+  }
+  renderAll();
+});
+document.getElementById('viewMonthBtn').addEventListener('click', () => {
+  viewMode = 'month';
+  document.getElementById('viewMonthBtn').classList.add('active');
+  document.getElementById('viewWeekBtn').classList.remove('active');
+  renderAll();
+});
+document.getElementById('viewWeekBtn').addEventListener('click', () => {
+  viewMode = 'week';
+  document.getElementById('viewWeekBtn').classList.add('active');
+  document.getElementById('viewMonthBtn').classList.remove('active');
   renderAll();
 });
 document.getElementById('todayBtn').addEventListener('click', () => {
@@ -918,10 +1021,11 @@ document.addEventListener('touchend', e => {
   const dy = e.changedTouches[0].clientY - _swipeY;
   // 横スワイプ（縦より横が大きく40px以上）
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-    if (dx < 0) {
-      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1);
+    if (viewMode === 'week') {
+      const days = dx < 0 ? 7 : -7;
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + days);
     } else {
-      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1);
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + (dx < 0 ? 1 : -1), 1);
     }
     renderAll();
   }

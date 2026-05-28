@@ -328,6 +328,37 @@ input, textarea, select { font-family: inherit; }
 }
 .today-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(255,120,80,.4); }
 
+/* View toggle (月/週) */
+.view-toggle {
+  display: flex;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-left: 4px;
+}
+.view-toggle-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.view-toggle-btn.active {
+  background: var(--takayuki);
+  color: white;
+}
+
+/* Week view */
+.calendar-grid.week-view { grid-auto-rows: auto; }
+.week-day-cell {
+  height: auto !important;
+  min-height: 100px;
+  overflow: visible !important;
+}
+
 /* Member filter pills */
 .member-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .filter-btn {
