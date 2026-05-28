@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="icon" type="image/png" href="icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -124,8 +124,8 @@
           <div class="detail-row" id="detailTime" style="display:none"></div>
           <div class="detail-row detail-note" id="detailNote" style="display:none"></div>
         </div>
-        <div id="detailImageWrap" style="display:none">
-          <img id="detailImageEl" class="detail-img" src="" alt="添付写真">
+        <div id="detailImagesWrap" style="display:none">
+          <div class="detail-imgs-grid" id="detailImgsGrid"></div>
         </div>
         <div class="detail-actions">
           <button type="button" class="btn btn-secondary" id="detailCloseBtn">閉じる</button>
@@ -177,18 +177,13 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">写真（お便りなど）</label>
+          <label class="form-label">写真（お便りなど・最大5枚）</label>
           <input type="file" id="eventImage" accept="image/*" style="display:none">
-          <div class="image-upload-area" id="imageUploadArea">
-            <button type="button" class="image-upload-btn" id="imageUploadBtn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              写真を追加
-            </button>
-          </div>
-          <div class="image-preview-wrap" id="imagePreviewWrap" style="display:none">
-            <img id="imagePreviewEl" class="image-preview-img" src="" alt="プレビュー">
-            <button type="button" class="image-remove-btn" id="imageRemoveBtn" aria-label="写真を削除">✕</button>
-          </div>
+          <div class="multi-image-grid" id="multiImageGrid"></div>
+          <button type="button" class="image-upload-btn" id="imageUploadBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            写真を追加
+          </button>
         </div>
 
         <div class="form-actions">
@@ -205,6 +200,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

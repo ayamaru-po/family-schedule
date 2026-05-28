@@ -61,8 +61,9 @@ let activeFilters = new Set();
 let sse           = null;
 let sseTimer      = null;
 let selectedMembers = ['貴之']; // 複数対応
-let pendingImageFile = null;   // 選択済みだが未アップロードのファイル
-let currentImageUrl  = null;   // 保存済みまたは新規アップロードのURL
+let pendingImageFiles = [];    // 選択済みだが未アップロードのファイル群
+let currentImageUrls  = [];   // 保存済みまたは新規アップロードのURL群
+const MAX_IMAGES = 5;
 
 /* ===========================
    Utilities
@@ -555,20 +556,37 @@ async function uploadImageFile(file) {
   return data.url;
 }
 
-function showImagePreview(src) {
-  document.getElementById('imageUploadArea').style.display = 'none';
-  const wrap = document.getElementById('imagePreviewWrap');
-  wrap.style.display = '';
-  document.getElementById('imagePreviewEl').src = src;
+// { type: 'pending', file, previewSrc } or { type: 'saved', url }
+let imageSlots = [];
+
+function renderImageGrid() {
+  const grid = document.getElementById('multiImageGrid');
+  const btn  = document.getElementById('imageUploadBtn');
+  grid.innerHTML = '';
+  imageSlots.forEach((slot, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'multi-img-thumb';
+    const img = document.createElement('img');
+    img.src = slot.type === 'pending' ? slot.previewSrc : slot.url;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'image-remove-btn';
+    rm.textContent = '✕';
+    rm.addEventListener('click', () => {
+      imageSlots.splice(i, 1);
+      renderImageGrid();
+    });
+    wrap.appendChild(img);
+    wrap.appendChild(rm);
+    grid.appendChild(wrap);
+  });
+  btn.style.display = imageSlots.length >= MAX_IMAGES ? 'none' : '';
 }
 
 function resetImageUI() {
-  pendingImageFile = null;
-  currentImageUrl  = null;
-  document.getElementById('imageUploadArea').style.display = '';
-  document.getElementById('imagePreviewWrap').style.display = 'none';
-  document.getElementById('imagePreviewEl').src = '';
+  imageSlots = [];
   document.getElementById('eventImage').value = '';
+  renderImageGrid();
 }
 
 function openDetail(ev) {
@@ -614,11 +632,21 @@ function openDetail(ev) {
     noteEl.style.display = 'none';
   }
 
-  // 写真
-  const imgWrap = document.getElementById('detailImageWrap');
-  if (ev.imageUrl) {
+  // 写真（複数枚対応・後方互換あり）
+  const urls = getImageUrls(ev);
+  const imgWrap = document.getElementById('detailImagesWrap');
+  const imgGrid = document.getElementById('detailImgsGrid');
+  imgGrid.innerHTML = '';
+  if (urls.length) {
     imgWrap.style.display = '';
-    document.getElementById('detailImageEl').src = ev.imageUrl;
+    urls.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'detail-img';
+      img.alt = '添付写真';
+      img.addEventListener('click', function() { this.classList.toggle('zoomed'); });
+      imgGrid.appendChild(img);
+    });
   } else {
     imgWrap.style.display = 'none';
   }
@@ -650,10 +678,10 @@ function openEdit(ev) {
   editingId = ev.id;
   // 画像状態をリセットしてから既存URLをセット
   resetImageUI();
-  if (ev.imageUrl) {
-    currentImageUrl = ev.imageUrl;
-    showImagePreview(ev.imageUrl);
-  }
+  getImageUrls(ev).forEach(url => {
+    imageSlots.push({ type: 'saved', url });
+  });
+  renderImageGrid();
   document.getElementById('eventDetail').style.display = 'none';
   document.getElementById('eventForm').style.display = '';
   document.getElementById('modalTitle').textContent = '予定を編集';
@@ -702,12 +730,20 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
   try {
-    // 画像が選択されていればまずアップロード
-    if (pendingImageFile) {
-      saveBtn.textContent = '写真をアップロード中...';
-      currentImageUrl = await uploadImageFile(pendingImageFile);
+    // 未アップロードの画像をアップロード
+    const pendingSlots = imageSlots.filter(s => s.type === 'pending');
+    if (pendingSlots.length) {
+      saveBtn.textContent = `写真をアップロード中... (0/${pendingSlots.length})`;
+      for (let i = 0; i < pendingSlots.length; i++) {
+        saveBtn.textContent = `写真をアップロード中... (${i+1}/${pendingSlots.length})`;
+        const url = await uploadImageFile(pendingSlots[i].file);
+        pendingSlots[i].type = 'saved';
+        pendingSlots[i].url  = url;
+      }
     }
-    data.imageUrl = currentImageUrl || null;
+    const urls = imageSlots.filter(s => s.type === 'saved').map(s => s.url);
+    data.imageUrls = urls.length ? JSON.stringify(urls) : null;
+    data.imageUrl  = urls[0] || null; // 後方互換
     saveBtn.textContent = '保存中...';
     const saved = await saveEvent(data);
     if (editingId) {
@@ -758,26 +794,29 @@ document.getElementById('modalClose').addEventListener('click', closeModal);
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('detailCloseBtn').addEventListener('click', closeModal);
 
+// 画像URLを取得（後方互換: imageUrls → imageUrl の順で参照）
+function getImageUrls(ev) {
+  if (ev.imageUrls) {
+    try { return JSON.parse(ev.imageUrls); } catch(e) {}
+  }
+  if (ev.imageUrl) return [ev.imageUrl];
+  return [];
+}
+
 // 画像選択
 document.getElementById('imageUploadBtn').addEventListener('click', () => {
   document.getElementById('eventImage').click();
 });
 document.getElementById('eventImage').addEventListener('change', e => {
   const file = e.target.files[0];
-  if (!file) return;
-  pendingImageFile = file;
-  currentImageUrl  = null;
+  if (!file || imageSlots.length >= MAX_IMAGES) return;
   const reader = new FileReader();
-  reader.onload = ev => showImagePreview(ev.target.result);
+  reader.onload = ev => {
+    imageSlots.push({ type: 'pending', file, previewSrc: ev.target.result });
+    renderImageGrid();
+  };
   reader.readAsDataURL(file);
-});
-document.getElementById('imageRemoveBtn').addEventListener('click', () => {
-  resetImageUI();
-});
-
-// 詳細の写真タップで拡大
-document.getElementById('detailImageEl').addEventListener('click', function() {
-  this.classList.toggle('zoomed');
+  document.getElementById('eventImage').value = '';
 });
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();

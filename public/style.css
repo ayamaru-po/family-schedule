@@ -586,6 +586,31 @@ input, textarea, select { font-family: inherit; }
 /* ===========================
    Image Upload
    =========================== */
+.multi-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.multi-img-thumb {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  background: #f8f8f8;
+}
+.multi-img-thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.multi-img-thumb .image-remove-btn {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  font-size: 11px;
+}
+
 .image-upload-area {
   display: flex;
 }
@@ -674,12 +699,22 @@ input, textarea, select { font-family: inherit; }
   white-space: pre-wrap;
   word-break: break-all;
 }
+.detail-imgs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.detail-imgs-grid .detail-img:only-child {
+  grid-column: 1 / -1;
+}
 .detail-img {
   width: 100%;
   border-radius: 12px;
   display: block;
   border: 1px solid var(--border);
   cursor: zoom-in;
+  object-fit: cover;
+  aspect-ratio: 4/3;
 }
 .detail-img.zoomed {
   position: fixed;
