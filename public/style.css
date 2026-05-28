@@ -177,10 +177,12 @@ input, textarea, select { font-family: inherit; }
   gap: 10px;
 }
 .header-family-img {
-  height: 52px;
+  height: 44px;
   width: auto;
+  max-width: 80px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 .brand-text {
   display: flex;
