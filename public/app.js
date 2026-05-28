@@ -825,32 +825,27 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
 
-// カレンダーのスワイプで月移動
-(function() {
-  const cal = document.getElementById('calendarGrid');
-  let startX = 0, startY = 0;
-
-  cal.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  }, { passive: true });
-
-  cal.addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    // 横方向の動きが縦より大きく、50px以上なら月移動
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      if (dx < 0) {
-        // 左スワイプ → 次の月
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1);
-      } else {
-        // 右スワイプ → 前の月
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1);
-      }
-      renderAll();
+// 画面全体のスワイプで月移動
+let _swipeX = 0, _swipeY = 0;
+document.addEventListener('touchstart', e => {
+  _swipeX = e.touches[0].clientX;
+  _swipeY = e.touches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  // モーダルが開いているときは無視
+  if (document.getElementById('modalOverlay').style.display !== 'none') return;
+  const dx = e.changedTouches[0].clientX - _swipeX;
+  const dy = e.changedTouches[0].clientY - _swipeY;
+  // 横スワイプ（縦より横が大きく40px以上）
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+    if (dx < 0) {
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1);
+    } else {
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1);
     }
-  }, { passive: true });
-})();
+    renderAll();
+  }
+}, { passive: true });
 document.getElementById('currentUser').addEventListener('change', e => {
   currentUser = e.target.value;
 });
