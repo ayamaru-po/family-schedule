@@ -355,8 +355,15 @@ input, textarea, select { font-family: inherit; }
 .calendar-grid.week-view { grid-auto-rows: auto; }
 .week-day-cell {
   height: auto !important;
-  min-height: 100px;
-  overflow: visible !important;
+  min-height: 120px;
+  overflow: hidden !important;
+  min-width: 0;
+}
+.week-day-cell .event-chip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Member filter pills */

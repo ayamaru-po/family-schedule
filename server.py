@@ -12,11 +12,15 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote as urlquote
+import urllib.parse
 
 PORT = int(os.environ.get('PORT', 3000))
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+VAPID_PUBLIC_KEY  = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_SUBJECT     = os.environ.get('VAPID_SUBJECT', 'mailto:family@example.com')
 
 DEFAULT_MEMBERS = ["貴之", "亜耶", "凌", "慶", "家族全員"]
 
@@ -47,6 +51,37 @@ def sb_request(method, path, data=None, params=''):
 
 def load_events():
     return sb_request('GET', 'events', params='?order=date')
+
+
+def send_push_all(title, body):
+    """全購読者にプッシュ通知を送信"""
+    if not VAPID_PRIVATE_KEY:
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return
+    subs = sb_request('GET', 'push_subscriptions')
+    if not subs:
+        return
+    payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
+    dead = []
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    'endpoint': sub['endpoint'],
+                    'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={'sub': VAPID_SUBJECT}
+            )
+        except Exception as e:
+            print(f"Push error: {e}")
+            dead.append(sub['id'])
+    for sid in dead:
+        sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
 
 
 def broadcast(message):
@@ -140,7 +175,9 @@ class Handler(BaseHTTPRequestHandler):
                     sse_clients.remove(self)
             return
 
-        if path == '/api/events':
+        if path == '/api/config':
+            self.send_json({'vapidPublicKey': VAPID_PUBLIC_KEY})
+        elif path == '/api/events':
             events = load_events()
             self.send_json(events)
         elif path == '/api/members':
@@ -225,6 +262,26 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/api/upload':
             self.handle_upload()
             return
+        if self.path == '/api/push/subscribe':
+            body = self.read_body()
+            sub = {
+                'id': str(uuid.uuid4()),
+                'endpoint': body.get('endpoint', ''),
+                'p256dh':   body.get('p256dh', ''),
+                'auth':     body.get('auth', ''),
+                'user_name': body.get('userName', ''),
+                'createdAt': datetime.now().isoformat()
+            }
+            # 同じendpointが既にあれば更新
+            existing = sb_request('GET', 'push_subscriptions',
+                                  params=f'?endpoint=eq.{urllib.parse.quote(sub["endpoint"], safe="")}')
+            if existing:
+                sb_request('PATCH', 'push_subscriptions', sub,
+                           params=f'?id=eq.{existing[0]["id"]}')
+            else:
+                sb_request('POST', 'push_subscriptions', sub)
+            self.send_json({'ok': True})
+            return
         if self.path != '/api/events':
             self.send_json({'error': 'Not found'}, 404)
             return
@@ -238,6 +295,11 @@ class Handler(BaseHTTPRequestHandler):
         saved = result[0] if isinstance(result, list) and result else event
         self.send_json(saved, 201)
         broadcast({'type': 'add', 'event': saved})
+        # Push通知
+        added_by = saved.get('addedBy', '')
+        title = saved.get('title', '新しい予定')
+        threading.Thread(target=send_push_all,
+            args=(f'📅 {added_by}が予定を追加', title), daemon=True).start()
 
     def do_PUT(self):
         parts = self.path.split('/')

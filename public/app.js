@@ -1035,6 +1035,52 @@ document.getElementById('currentUser').addEventListener('change', e => {
 });
 
 /* ===========================
+   Push Notifications
+   =========================== */
+async function setupPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+
+    // 既に購読済みか確認
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      // VAPID公開鍵を取得
+      const cfg = await fetch(`${BASE_URL}/api/config`).then(r => r.json());
+      if (!cfg.vapidPublicKey) return;
+      const key = urlBase64ToUint8Array(cfg.vapidPublicKey);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key
+      });
+    }
+    // サーバーに購読情報を送信
+    const subJson = sub.toJSON();
+    await fetch(`${BASE_URL}/api/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: subJson.endpoint,
+        p256dh:   subJson.keys.p256dh,
+        auth:     subJson.keys.auth,
+        userName: currentUser
+      })
+    });
+  } catch(e) {
+    console.log('Push setup error:', e);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+/* ===========================
    Init
    =========================== */
 async function init() {
@@ -1045,6 +1091,8 @@ async function init() {
   setStatus(false);
   await fetchEvents();
   connectSSE();
+  // 少し遅らせてから通知許可を求める
+  setTimeout(setupPush, 3000);
 }
 
 init();
