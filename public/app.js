@@ -1037,11 +1037,33 @@ document.getElementById('currentUser').addEventListener('change', e => {
 /* ===========================
    Push Notifications
    =========================== */
+function updateBellBtn() {
+  const btn = document.getElementById('bellBtn');
+  if (!btn) return;
+  if (!('Notification' in window)) { btn.style.display = 'none'; return; }
+  const perm = Notification.permission;
+  btn.classList.remove('enabled', 'denied');
+  if (perm === 'granted') {
+    btn.classList.add('enabled');
+    btn.title = '通知は有効です';
+  } else if (perm === 'denied') {
+    btn.classList.add('denied');
+    btn.title = '通知がブロックされています（設定から許可してください）';
+  } else {
+    btn.title = 'タップして通知を有効にする';
+  }
+}
+
 async function setupPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission === 'denied') {
+    alert('通知がブロックされています。\niPhoneの場合：設定 → Safari → 通知 → このサイトを許可してください。');
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
     const perm = await Notification.requestPermission();
+    updateBellBtn();
     if (perm !== 'granted') return;
 
     // 既に購読済みか確認
@@ -1091,8 +1113,19 @@ async function init() {
   setStatus(false);
   await fetchEvents();
   connectSSE();
-  // 少し遅らせてから通知許可を求める
-  setTimeout(setupPush, 3000);
+  updateBellBtn();
+  // ベルボタンをタップしたときだけ通知許可を求める（iOS対応）
+  const bellBtn = document.getElementById('bellBtn');
+  if (bellBtn) {
+    bellBtn.addEventListener('click', () => {
+      if (Notification.permission === 'granted') {
+        // 既に許可済みなら再購読だけ
+        setupPush();
+      } else {
+        setupPush();
+      }
+    });
+  }
 }
 
 init();

@@ -251,6 +251,27 @@ input, textarea, select { font-family: inherit; }
 }
 .user-select:focus { outline: none; border-color: #FF9060; }
 
+.bell-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: white;
+  border: 2px solid #FFD4A8;
+  color: var(--text-2);
+  transition: all .2s;
+}
+.bell-btn:hover { border-color: #FF9060; color: var(--text); }
+.bell-btn.enabled {
+  background: #FFF4E6;
+  border-color: #FF9060;
+  color: #FF7043;
+}
+.bell-btn.denied {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 /* ===========================
    Main Layout
    =========================== */
