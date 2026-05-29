@@ -696,6 +696,8 @@ function compressImage(file, maxWidth, quality) {
   return new Promise(resolve => {
     const img = new Image();
     const url = URL.createObjectURL(file);
+    // 読み込み失敗（HEICなど）はオリジナルをそのまま使う
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.onload = () => {
       URL.revokeObjectURL(url);
       let w = img.width, h = img.height;
@@ -703,7 +705,10 @@ function compressImage(file, maxWidth, quality) {
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+      canvas.toBlob(blob => {
+        // blobがnullまたは空の場合はオリジナルにフォールバック
+        resolve((blob && blob.size > 0) ? blob : file);
+      }, 'image/jpeg', quality);
     };
     img.src = url;
   });
@@ -711,10 +716,17 @@ function compressImage(file, maxWidth, quality) {
 
 async function uploadImageFile(file) {
   const compressed = await compressImage(file, 1200, 0.8);
+  const uploadFile = (compressed instanceof Blob && !(compressed instanceof File))
+    ? compressed
+    : compressed;
   const fd = new FormData();
-  fd.append('file', compressed, 'photo.jpg');
+  fd.append('file', uploadFile, 'photo.jpg');
   const resp = await fetch(`${BASE_URL}/api/upload`, { method: 'POST', body: fd });
-  if (!resp.ok) throw new Error('画像のアップロードに失敗しました');
+  if (!resp.ok) {
+    let detail = '';
+    try { const j = await resp.json(); detail = j.error || ''; } catch {}
+    throw new Error('画像のアップロードに失敗しました' + (detail ? `\n(${detail})` : ''));
+  }
   const data = await resp.json();
   return data.url;
 }
