@@ -175,7 +175,11 @@ class Handler(BaseHTTPRequestHandler):
                     sse_clients.remove(self)
             return
 
-        if path == '/api/config':
+        if path == '/api/push/test':
+            threading.Thread(target=send_push_all,
+                args=('🔔 テスト通知', '通知の設定がうまくいっています！'), daemon=True).start()
+            self.send_json({'ok': True})
+        elif path == '/api/config':
             self.send_json({'vapidPublicKey': VAPID_PUBLIC_KEY})
         elif path == '/api/events':
             events = load_events()
