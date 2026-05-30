@@ -1115,9 +1115,46 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 /* ===========================
+   自分の名前を選ぶ（初回起動時）
+   =========================== */
+function askMyName() {
+  return new Promise(resolve => {
+    const saved = localStorage.getItem('myName');
+    if (saved) { resolve(saved); return; }
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:20px;padding:28px 24px;width:300px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18);';
+    box.innerHTML = `
+      <div style="font-size:32px;margin-bottom:8px">👤</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:18px">あなたは誰ですか？</div>
+      <div id="nameChoices" style="display:flex;flex-direction:column;gap:10px;"></div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const choices = document.getElementById('nameChoices');
+    MEMBERS.filter(m => m.id !== '家族全員').forEach(m => {
+      const btn = document.createElement('button');
+      btn.textContent = m.name;
+      btn.style.cssText = `padding:12px;border-radius:12px;border:none;background:${m.color};color:#fff;font-size:15px;font-weight:700;cursor:pointer;`;
+      btn.addEventListener('click', () => {
+        localStorage.setItem('myName', m.id);
+        document.body.removeChild(overlay);
+        resolve(m.id);
+      });
+      choices.appendChild(btn);
+    });
+  });
+}
+
+/* ===========================
    Init
    =========================== */
 async function init() {
+  currentUser = await askMyName();
   renderUserSelect();
   renderLegend();
   renderFilters();
