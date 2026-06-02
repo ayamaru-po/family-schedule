@@ -1003,14 +1003,17 @@ document.getElementById('imageUploadBtn').addEventListener('click', () => {
   document.getElementById('eventImage').click();
 });
 document.getElementById('eventImage').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file || imageSlots.length >= MAX_IMAGES) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    imageSlots.push({ type: 'pending', file, previewSrc: ev.target.result });
-    renderImageGrid();
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(e.target.files);
+  const remaining = MAX_IMAGES - imageSlots.length;
+  if (!files.length || remaining <= 0) return;
+  files.slice(0, remaining).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      imageSlots.push({ type: 'pending', file, previewSrc: ev.target.result });
+      renderImageGrid();
+    };
+    reader.readAsDataURL(file);
+  });
   document.getElementById('eventImage').value = '';
 });
 document.getElementById('modalOverlay').addEventListener('click', e => {
