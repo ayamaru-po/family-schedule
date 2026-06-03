@@ -764,6 +764,76 @@ function resetImageUI() {
   renderImageGrid();
 }
 
+/* ===========================
+   ピンチズーム（詳細画像用）
+   =========================== */
+function resetPinchZoom(img) {
+  img._pzScale = 1; img._pzX = 0; img._pzY = 0;
+  img.style.transform = '';
+}
+
+function enablePinchZoom(img) {
+  img._pzScale = 1; img._pzX = 0; img._pzY = 0;
+  let lastScale = 1, startDist = 0;
+  let startMidX = 0, startMidY = 0;
+  let lastX = 0, lastY = 0;
+  let dragStartX = 0, dragStartY = 0;
+  let isPinching = false, isDragging = false;
+
+  function applyTransform() {
+    img.style.transformOrigin = 'center center';
+    img.style.transform = `translate(${img._pzX}px,${img._pzY}px) scale(${img._pzScale})`;
+  }
+  function touchDist(t) {
+    return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  }
+  function touchMid(t) {
+    return [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+  }
+
+  img.addEventListener('touchstart', e => {
+    if (!img.classList.contains('zoomed')) return;
+    if (e.touches.length === 2) {
+      isPinching = true; isDragging = false;
+      startDist = touchDist(e.touches);
+      [startMidX, startMidY] = touchMid(e.touches);
+      lastScale = img._pzScale; lastX = img._pzX; lastY = img._pzY;
+      e.preventDefault();
+    } else if (e.touches.length === 1 && img._pzScale > 1) {
+      isDragging = true;
+      dragStartX = e.touches[0].clientX - img._pzX;
+      dragStartY = e.touches[0].clientY - img._pzY;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  img.addEventListener('touchmove', e => {
+    if (!img.classList.contains('zoomed')) return;
+    if (e.touches.length === 2 && isPinching) {
+      const d = touchDist(e.touches);
+      img._pzScale = Math.min(8, Math.max(1, lastScale * d / startDist));
+      const [mx, my] = touchMid(e.touches);
+      img._pzX = lastX + (mx - startMidX);
+      img._pzY = lastY + (my - startMidY);
+      applyTransform();
+      e.preventDefault();
+    } else if (e.touches.length === 1 && isDragging && img._pzScale > 1) {
+      img._pzX = e.touches[0].clientX - dragStartX;
+      img._pzY = e.touches[0].clientY - dragStartY;
+      applyTransform();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  img.addEventListener('touchend', e => {
+    if (e.touches.length < 2) isPinching = false;
+    if (e.touches.length === 0) {
+      isDragging = false;
+      if (img._pzScale <= 1.05) resetPinchZoom(img);
+    }
+  });
+}
+
 function openDetail(ev) {
   document.getElementById('modalTitle').textContent = '予定の詳細';
   document.getElementById('eventForm').style.display = 'none';
@@ -819,7 +889,12 @@ function openDetail(ev) {
       img.src = url;
       img.className = 'detail-img';
       img.alt = '添付写真';
-      img.addEventListener('click', function() { this.classList.toggle('zoomed'); });
+      img.addEventListener('click', function() {
+        if (this._pzScale && this._pzScale > 1.05) return; // ズーム中はタップ閉じ無効
+        this.classList.toggle('zoomed');
+        if (!this.classList.contains('zoomed')) resetPinchZoom(this);
+      });
+      enablePinchZoom(img);
       imgGrid.appendChild(img);
     });
   } else {
