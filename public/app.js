@@ -139,15 +139,20 @@ async function deleteEvent(id) {
 /* ===========================
    SSE (Server-Sent Events)
    =========================== */
+let _sseRetryCount = 0;
+
 function connectSSE() {
   if (sse) sse.close();
   try {
     sse = new EventSource(`${BASE_URL}/api/events/stream`);
-    sse.onopen  = () => setStatus(true);
+    sse.onopen  = () => { _sseRetryCount = 0; setStatus(true); };
     sse.onerror = () => {
+      _sseRetryCount++;
       setStatus(false);
       sse.close();
-      sseTimer = setTimeout(connectSSE, 4500);
+      // 起動待ち中は少し間隔を開けて再試行（最大10秒）
+      const delay = Math.min(4500 + _sseRetryCount * 1000, 10000);
+      sseTimer = setTimeout(connectSSE, delay);
     };
     sse.onmessage = ({ data }) => {
       const msg = JSON.parse(data);
@@ -164,10 +169,17 @@ function connectSSE() {
   } catch { setStatus(false); }
 }
 
+// サーバーをスリープさせないために定期ping（4分ごと）
+function startKeepAlive() {
+  setInterval(async () => {
+    try { await fetch(`${BASE_URL}/api/events`); } catch {}
+  }, 4 * 60 * 1000);
+}
+
 function setStatus(ok) {
   const el = document.getElementById('connectionStatus');
   el.className = 'connection-badge' + (ok ? '' : ' offline');
-  el.querySelector('.connection-text').textContent = ok ? '同期中' : 'オフライン';
+  el.querySelector('.connection-text').textContent = ok ? '同期中' : (_sseRetryCount > 0 ? '接続中...' : 'オフライン');
 }
 
 /* ===========================
@@ -1240,6 +1252,7 @@ async function init() {
   setStatus(false);
   await fetchEvents();
   connectSSE();
+  startKeepAlive();
   updateBellBtn();
   // ベルボタンをタップしたときだけ通知許可を求める（iOS対応）
   const bellBtn = document.getElementById('bellBtn');
