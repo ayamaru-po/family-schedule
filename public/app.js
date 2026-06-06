@@ -779,6 +779,30 @@ function resetImageUI() {
 /* ===========================
    ピンチズーム（詳細画像用）
    =========================== */
+function openZoomedImg(img) {
+  img.classList.add('zoomed');
+  // 閉じるボタン
+  const closeBtn = document.createElement('div');
+  closeBtn.className = 'img-zoom-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.id = 'imgZoomClose';
+  closeBtn.addEventListener('click', () => closeZoomedImg(img));
+  // ヒントテキスト
+  const hint = document.createElement('div');
+  hint.className = 'img-zoom-hint';
+  hint.id = 'imgZoomHint';
+  hint.textContent = '指2本でズーム・タップで閉じる';
+  document.body.appendChild(closeBtn);
+  document.body.appendChild(hint);
+}
+
+function closeZoomedImg(img) {
+  img.classList.remove('zoomed');
+  resetPinchZoom(img);
+  document.getElementById('imgZoomClose')?.remove();
+  document.getElementById('imgZoomHint')?.remove();
+}
+
 function resetPinchZoom(img) {
   img._pzScale = 1; img._pzX = 0; img._pzY = 0;
   img.style.transform = '';
@@ -902,9 +926,12 @@ function openDetail(ev) {
       img.className = 'detail-img';
       img.alt = '添付写真';
       img.addEventListener('click', function() {
-        if (this._pzScale && this._pzScale > 1.05) return; // ズーム中はタップ閉じ無効
-        this.classList.toggle('zoomed');
-        if (!this.classList.contains('zoomed')) resetPinchZoom(this);
+        if (this._pzScale && this._pzScale > 1.05) return;
+        if (this.classList.contains('zoomed')) {
+          closeZoomedImg(this);
+        } else {
+          openZoomedImg(this);
+        }
       });
       enablePinchZoom(img);
       imgGrid.appendChild(img);

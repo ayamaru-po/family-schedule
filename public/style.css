@@ -795,6 +795,35 @@ input, textarea, select { font-family: inherit; }
   z-index: 9999;
   cursor: zoom-out;
 }
+.img-zoom-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  border: 2px solid rgba(255,255,255,.5);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.img-zoom-hint {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,.6);
+  font-size: 12px;
+  z-index: 10000;
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 .detail-actions {
   display: flex;
