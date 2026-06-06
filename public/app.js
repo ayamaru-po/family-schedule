@@ -852,6 +852,7 @@ function openGallery(urls, startIndex) {
   }, { passive: false });
 
   overlay.addEventListener('touchmove', e => {
+    e.preventDefault(); // 常にデフォルト動作を防ぐ（iOSのスクロール横取り対策）
     if (e.touches.length === 2 && isPinching) {
       const d = touchDist(e.touches);
       scale = Math.min(8, Math.max(1, lastScale * d / startDist));
@@ -859,35 +860,35 @@ function openGallery(urls, startIndex) {
       panX = lastPanX + (mx - startMidX);
       panY = lastPanY + (my - startMidY);
       applyTransform();
-      e.preventDefault();
     } else if (e.touches.length === 1 && isDragging && scale > 1) {
       panX = e.touches[0].clientX - swipeStartX + lastPanX;
       panY = e.touches[0].clientY - swipeStartY + lastPanY;
       applyTransform();
-      e.preventDefault();
     }
   }, { passive: false });
 
   overlay.addEventListener('touchend', e => {
+    e.preventDefault();
     if (e.touches.length < 2) isPinching = false;
     if (e.touches.length === 0) {
+      const dx = e.changedTouches[0].clientX - swipeStartX;
+      const dy = e.changedTouches[0].clientY - swipeStartY;
       if (scale <= 1.05) {
         resetTransform();
-        // スワイプで画像切り替え
-        const dx = e.changedTouches[0].clientX - swipeStartX;
-        const dy = e.changedTouches[0].clientY - swipeStartY;
-        if (urls.length > 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (urls.length > 1 && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+          // スワイプで切り替え
           const next = dx < 0 ? Math.min(idx+1, urls.length-1) : Math.max(idx-1, 0);
           if (next !== idx) showImg(next);
-        } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+        } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
           close(); // タップで閉じる
         }
       } else {
         lastPanX = panX; lastPanY = panY;
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) close(); // ズーム中もタップで閉じる
       }
       isDragging = false;
     }
-  });
+  }, { passive: false });
 
   showImg(startIndex);
 }
