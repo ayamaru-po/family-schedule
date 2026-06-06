@@ -779,95 +779,117 @@ function resetImageUI() {
 /* ===========================
    ピンチズーム（詳細画像用）
    =========================== */
-function openZoomedImg(img) {
-  img.classList.add('zoomed');
-  // 閉じるボタン
-  const closeBtn = document.createElement('div');
-  closeBtn.className = 'img-zoom-close';
-  closeBtn.innerHTML = '✕';
-  closeBtn.id = 'imgZoomClose';
-  closeBtn.addEventListener('click', () => closeZoomedImg(img));
-  // ヒントテキスト
-  const hint = document.createElement('div');
-  hint.className = 'img-zoom-hint';
-  hint.id = 'imgZoomHint';
-  hint.textContent = '指2本でズーム・タップで閉じる';
-  document.body.appendChild(closeBtn);
-  document.body.appendChild(hint);
-}
-
-function closeZoomedImg(img) {
-  img.classList.remove('zoomed');
-  resetPinchZoom(img);
-  document.getElementById('imgZoomClose')?.remove();
-  document.getElementById('imgZoomHint')?.remove();
-}
-
-function resetPinchZoom(img) {
-  img._pzScale = 1; img._pzX = 0; img._pzY = 0;
-  img.style.transform = '';
-}
-
-function enablePinchZoom(img) {
-  img._pzScale = 1; img._pzX = 0; img._pzY = 0;
-  let lastScale = 1, startDist = 0;
-  let startMidX = 0, startMidY = 0;
-  let lastX = 0, lastY = 0;
-  let dragStartX = 0, dragStartY = 0;
+/* ===========================
+   ギャラリービューア
+   =========================== */
+function openGallery(urls, startIndex) {
+  let idx = startIndex;
+  let scale = 1, panX = 0, panY = 0;
+  let lastScale = 1, lastPanX = 0, lastPanY = 0;
+  let startDist = 0, startMidX = 0, startMidY = 0;
+  let swipeStartX = 0, swipeStartY = 0;
   let isPinching = false, isDragging = false;
 
-  function applyTransform() {
-    img.style.transformOrigin = 'center center';
-    img.style.transform = `translate(${img._pzX}px,${img._pzY}px) scale(${img._pzScale})`;
-  }
-  function touchDist(t) {
-    return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  }
-  function touchMid(t) {
-    return [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
-  }
+  // オーバーレイ
+  const overlay = document.createElement('div');
+  overlay.className = 'gallery-overlay';
 
-  img.addEventListener('touchstart', e => {
-    if (!img.classList.contains('zoomed')) return;
+  const imgEl = document.createElement('img');
+  imgEl.className = 'gallery-img';
+
+  const counter = document.createElement('div');
+  counter.className = 'gallery-counter';
+
+  const closeBtn = document.createElement('div');
+  closeBtn.className = 'gallery-close';
+  closeBtn.textContent = '✕';
+
+  const hint = document.createElement('div');
+  hint.className = 'gallery-hint';
+  hint.textContent = urls.length > 1 ? '← スワイプで切り替え　指2本でズーム →' : '指2本でズーム・タップで閉じる';
+
+  overlay.appendChild(imgEl);
+  overlay.appendChild(counter);
+  overlay.appendChild(closeBtn);
+  overlay.appendChild(hint);
+  document.body.appendChild(overlay);
+
+  function resetTransform() {
+    scale = 1; panX = 0; panY = 0;
+    imgEl.style.transform = '';
+  }
+  function applyTransform() {
+    imgEl.style.transformOrigin = 'center center';
+    imgEl.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+  }
+  function showImg(i) {
+    idx = i;
+    imgEl.src = urls[i];
+    resetTransform();
+    counter.textContent = urls.length > 1 ? `${i + 1} / ${urls.length}` : '';
+  }
+  function close() { overlay.remove(); }
+
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  function touchDist(t) { return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY); }
+  function touchMid(t)  { return [(t[0].clientX+t[1].clientX)/2, (t[0].clientY+t[1].clientY)/2]; }
+
+  overlay.addEventListener('touchstart', e => {
     if (e.touches.length === 2) {
       isPinching = true; isDragging = false;
       startDist = touchDist(e.touches);
       [startMidX, startMidY] = touchMid(e.touches);
-      lastScale = img._pzScale; lastX = img._pzX; lastY = img._pzY;
+      lastScale = scale; lastPanX = panX; lastPanY = panY;
       e.preventDefault();
-    } else if (e.touches.length === 1 && img._pzScale > 1) {
-      isDragging = true;
-      dragStartX = e.touches[0].clientX - img._pzX;
-      dragStartY = e.touches[0].clientY - img._pzY;
+    } else if (e.touches.length === 1) {
+      swipeStartX = e.touches[0].clientX;
+      swipeStartY = e.touches[0].clientY;
+      if (scale > 1) { isDragging = true; }
       e.preventDefault();
     }
   }, { passive: false });
 
-  img.addEventListener('touchmove', e => {
-    if (!img.classList.contains('zoomed')) return;
+  overlay.addEventListener('touchmove', e => {
     if (e.touches.length === 2 && isPinching) {
       const d = touchDist(e.touches);
-      img._pzScale = Math.min(8, Math.max(1, lastScale * d / startDist));
+      scale = Math.min(8, Math.max(1, lastScale * d / startDist));
       const [mx, my] = touchMid(e.touches);
-      img._pzX = lastX + (mx - startMidX);
-      img._pzY = lastY + (my - startMidY);
+      panX = lastPanX + (mx - startMidX);
+      panY = lastPanY + (my - startMidY);
       applyTransform();
       e.preventDefault();
-    } else if (e.touches.length === 1 && isDragging && img._pzScale > 1) {
-      img._pzX = e.touches[0].clientX - dragStartX;
-      img._pzY = e.touches[0].clientY - dragStartY;
+    } else if (e.touches.length === 1 && isDragging && scale > 1) {
+      panX = e.touches[0].clientX - swipeStartX + lastPanX;
+      panY = e.touches[0].clientY - swipeStartY + lastPanY;
       applyTransform();
       e.preventDefault();
     }
   }, { passive: false });
 
-  img.addEventListener('touchend', e => {
+  overlay.addEventListener('touchend', e => {
     if (e.touches.length < 2) isPinching = false;
     if (e.touches.length === 0) {
+      if (scale <= 1.05) {
+        resetTransform();
+        // スワイプで画像切り替え
+        const dx = e.changedTouches[0].clientX - swipeStartX;
+        const dy = e.changedTouches[0].clientY - swipeStartY;
+        if (urls.length > 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+          const next = dx < 0 ? Math.min(idx+1, urls.length-1) : Math.max(idx-1, 0);
+          if (next !== idx) showImg(next);
+        } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+          close(); // タップで閉じる
+        }
+      } else {
+        lastPanX = panX; lastPanY = panY;
+      }
       isDragging = false;
-      if (img._pzScale <= 1.05) resetPinchZoom(img);
     }
   });
+
+  showImg(startIndex);
 }
 
 function openDetail(ev) {
@@ -920,20 +942,12 @@ function openDetail(ev) {
   imgGrid.innerHTML = '';
   if (urls.length) {
     imgWrap.style.display = '';
-    urls.forEach(url => {
+    urls.forEach((url, i) => {
       const img = document.createElement('img');
       img.src = url;
       img.className = 'detail-img';
       img.alt = '添付写真';
-      img.addEventListener('click', function() {
-        if (this._pzScale && this._pzScale > 1.05) return;
-        if (this.classList.contains('zoomed')) {
-          closeZoomedImg(this);
-        } else {
-          openZoomedImg(this);
-        }
-      });
-      enablePinchZoom(img);
+      img.addEventListener('click', () => openGallery(urls, i));
       imgGrid.appendChild(img);
     });
   } else {
