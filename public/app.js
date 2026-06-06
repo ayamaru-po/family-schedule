@@ -111,10 +111,24 @@ function chipStyle(ev) {
 /* ===========================
    API
    =========================== */
+const CACHE_KEY = 'family_events_cache';
+
 async function fetchEvents() {
+  // まずキャッシュから即座に表示
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      events = JSON.parse(cached);
+      renderAll();
+    }
+  } catch {}
+
+  // バックグラウンドで最新データを取得
   try {
     const r = await fetch(`${BASE_URL}/api/events`);
-    events = await r.json();
+    const fresh = await r.json();
+    events = fresh;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(fresh));
     renderAll();
   } catch (e) { console.warn('fetch error', e); }
 }
@@ -164,6 +178,7 @@ function connectSSE() {
       } else if (msg.type === 'delete') {
         events = events.filter(e => e.id !== msg.id);
       }
+      localStorage.setItem(CACHE_KEY, JSON.stringify(events));
       renderAll();
     };
   } catch { setStatus(false); }
