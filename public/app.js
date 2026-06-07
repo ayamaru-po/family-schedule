@@ -123,14 +123,23 @@ async function fetchEvents() {
     }
   } catch {}
 
-  // バックグラウンドで最新データを取得
-  try {
-    const r = await fetch(`${BASE_URL}/api/events`);
-    const fresh = await r.json();
-    events = fresh;
-    localStorage.setItem(CACHE_KEY, JSON.stringify(fresh));
-    renderAll();
-  } catch (e) { console.warn('fetch error', e); }
+  // バックグラウンドで最新データを取得（サーバー起動待ちでリトライ）
+  for (let attempt = 0; attempt < 15; attempt++) {
+    try {
+      const r = await fetch(`${BASE_URL}/api/events`);
+      if (!r.ok) throw new Error('not ok');
+      const fresh = await r.json();
+      events = fresh;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(fresh));
+      renderAll();
+      return;
+    } catch (e) {
+      if (attempt < 14) {
+        // 2秒待ってリトライ（最大30秒待つ）
+        await new Promise(res => setTimeout(res, 2000));
+      }
+    }
+  }
 }
 
 async function saveEvent(data) {
@@ -164,8 +173,10 @@ function connectSSE() {
       _sseRetryCount++;
       setStatus(false);
       sse.close();
-      // 起動待ち中は少し間隔を開けて再試行（最大10秒）
-      const delay = Math.min(4500 + _sseRetryCount * 1000, 10000);
+      // 最初は短め、徐々に間隔を広げる（最大8秒）
+      const delay = _sseRetryCount <= 3
+        ? Math.min(1000 + _sseRetryCount * 500, 2000)
+        : Math.min(3000 + _sseRetryCount * 500, 8000);
       sseTimer = setTimeout(connectSSE, delay);
     };
     sse.onmessage = ({ data }) => {
