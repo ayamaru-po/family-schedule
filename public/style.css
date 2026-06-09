@@ -32,7 +32,7 @@
    Reset + Base
    =========================== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; overflow-x: hidden; }
+html { scroll-behavior: smooth; overflow-x: hidden; overscroll-behavior-x: none; }
 
 body {
   font-family: var(--font);
@@ -43,6 +43,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
@@ -335,8 +336,9 @@ input, textarea, select { font-family: inherit; }
 .month-title {
   font-size: 24px; font-weight: 800;
   color: var(--text);
-  min-width: 172px; text-align: center;
+  min-width: 0; text-align: center;
   letter-spacing: -.03em;
+  white-space: nowrap;
 }
 
 .today-btn {
