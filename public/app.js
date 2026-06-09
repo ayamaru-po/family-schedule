@@ -1029,13 +1029,27 @@ function openEdit(ev) {
   showModal();
 }
 
+let _bodyScrollY = 0;
+
 function showModal() {
+  // iOSで背景が横ブレしないようにbodyをロック
+  _bodyScrollY = window.scrollY;
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${_bodyScrollY}px`;
+  document.body.style.width = '100%';
+
   const ov = document.getElementById('modalOverlay');
   ov.style.display = 'flex';
   requestAnimationFrame(() => document.getElementById('eventTitle').focus());
 }
 
 function closeModal() {
+  // bodyロック解除・スクロール位置を復元
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+  window.scrollTo(0, _bodyScrollY);
+
   document.getElementById('modalOverlay').style.display = 'none';
   document.getElementById('eventDetail').style.display = 'none';
   document.getElementById('eventForm').style.display = '';
