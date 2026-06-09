@@ -32,7 +32,7 @@
    Reset + Base
    =========================== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 body {
   font-family: var(--font);
@@ -42,6 +42,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
@@ -627,7 +628,7 @@ input, textarea, select { font-family: inherit; }
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   width: 100%; max-width: 490px; max-height: 92vh;
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
   animation: modal-in .22s cubic-bezier(0.34, 1.56, 0.64, 1);
   border: 2px solid #FFE4C8;
 }
