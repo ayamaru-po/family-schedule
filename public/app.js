@@ -999,6 +999,7 @@ function openAdd(dateStr) {
   document.getElementById('eventStartTime').value = '';
   document.getElementById('eventEndTime').value = '';
   document.getElementById('eventNote').value = '';
+  document.getElementById('eventNotify').checked = false;
   document.getElementById('deleteEventBtn').style.display = 'none';
   renderMemberOptions(currentUser);
   showModal();
@@ -1022,6 +1023,7 @@ function openEdit(ev) {
   document.getElementById('eventStartTime').value = ev.startTime || '';
   document.getElementById('eventEndTime').value = ev.endTime || '';
   document.getElementById('eventNote').value = ev.note || '';
+  document.getElementById('eventNotify').checked = ev.notify_enabled || false;
   document.getElementById('deleteEventBtn').style.display = 'inline-flex';
   renderMemberOptions(membersOf(ev));
   showModal();
@@ -1052,8 +1054,10 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
     startTime: document.getElementById('eventStartTime').value || null,
     endTime:   document.getElementById('eventEndTime').value || null,
     member:    selectedMembers.length === 1 ? selectedMembers[0] : selectedMembers,
-    note:      document.getElementById('eventNote').value.trim() || null,
-    addedBy:   currentUser,
+    note:           document.getElementById('eventNote').value.trim() || null,
+    addedBy:        currentUser,
+    notify_enabled: document.getElementById('eventNotify').checked,
+    notified:       false,
   };
   if (editingId) data.id = editingId;
 

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
   <link rel="apple-touch-icon" href="icon-tako.png">
   <link rel="icon" type="image/png" href="icon-tako.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -170,6 +170,15 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">通知</label>
+          <label class="notify-toggle-wrap">
+            <input type="checkbox" id="eventNotify" class="notify-checkbox">
+            <span class="notify-slider"></span>
+            <span class="notify-toggle-text">予定の時間に通知する</span>
+          </label>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">誰の予定？</label>
           <div class="member-selector" id="memberSelect"></div>
         </div>
@@ -203,6 +212,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

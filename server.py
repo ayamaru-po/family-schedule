@@ -53,6 +53,91 @@ def load_events():
     return sb_request('GET', 'events', params='?order=date')
 
 
+def send_push_to_user(user_name, title, body):
+    """特定ユーザーにプッシュ通知を送信"""
+    if not VAPID_PRIVATE_KEY:
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return
+    subs = sb_request('GET', 'push_subscriptions',
+                      params=f'?user_name=eq.{urllib.parse.quote(user_name, safe="")}')
+    if not subs:
+        return
+    payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
+    dead = []
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    'endpoint': sub['endpoint'],
+                    'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={'sub': VAPID_SUBJECT}
+            )
+        except Exception as e:
+            print(f"Push error: {e}")
+            dead.append(sub['id'])
+    for sid in dead:
+        sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
+
+
+def check_and_send_notifications():
+    """通知が必要なイベントをチェックして送信"""
+    now = datetime.now()
+    try:
+        pending = sb_request('GET', 'events',
+                             params='?notify_enabled=eq.true&notified=eq.false')
+    except Exception as e:
+        print(f"Notification check error: {e}")
+        return
+    for event in pending:
+        date_str = event.get('date', '')
+        time_str = event.get('startTime') or '08:00'
+        if not date_str:
+            continue
+        try:
+            event_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        except Exception:
+            continue
+        diff_sec = (event_dt - now).total_seconds()
+        # イベント時間の前後1分以内に通知
+        if -60 <= diff_sec <= 60:
+            added_by = event.get('addedBy', '')
+            event_title = event.get('title', '予定の時間です')
+            notif_title = f'⏰ {event_title}'
+            notif_body = f'{time_str} の予定の時間です'
+            if added_by:
+                threading.Thread(
+                    target=send_push_to_user,
+                    args=(added_by, notif_title, notif_body),
+                    daemon=True
+                ).start()
+            else:
+                threading.Thread(
+                    target=send_push_all,
+                    args=(notif_title, notif_body),
+                    daemon=True
+                ).start()
+            # 送信済みフラグを立てる（二重送信防止）
+            sb_request('PATCH', 'events', {'notified': True},
+                       params=f'?id=eq.{event["id"]}')
+
+
+def notification_scheduler():
+    """バックグラウンドで1分ごとに通知チェック"""
+    import time as time_module
+    while True:
+        try:
+            check_and_send_notifications()
+        except Exception as e:
+            print(f"Scheduler error: {e}")
+        time_module.sleep(60)
+
+
 def send_push_all(title, body):
     """全購読者にプッシュ通知を送信"""
     if not VAPID_PRIVATE_KEY:
@@ -332,6 +417,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    # 通知スケジューラーをバックグラウンドで起動
+    threading.Thread(target=notification_scheduler, daemon=True).start()
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     import socket
     hostname = socket.gethostname()
