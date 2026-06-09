@@ -865,6 +865,7 @@ input, textarea, select { font-family: inherit; }
   width: 100%;
 }
 .form-input:focus { outline: none; border-color: #FFB347; background: white; box-shadow: 0 0 0 3px rgba(255,179,71,.15); }
+.input-error { border-color: #E5556B !important; background: #FFF1F2 !important; box-shadow: 0 0 0 3px rgba(229,85,107,.15) !important; }
 .form-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 

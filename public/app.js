@@ -1061,6 +1061,16 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
   };
   if (editingId) data.id = editingId;
 
+  // 通知ONなのに時刻が空の場合はエラー
+  if (data.notify_enabled && !data.startTime) {
+    const timeInput = document.getElementById('eventStartTime');
+    timeInput.focus();
+    timeInput.classList.add('input-error');
+    timeInput.addEventListener('input', () => timeInput.classList.remove('input-error'), { once: true });
+    alert('通知をONにする場合は「開始時刻」を入力してください');
+    return;
+  }
+
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
   try {
