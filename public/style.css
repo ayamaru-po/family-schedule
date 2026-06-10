@@ -32,7 +32,12 @@
    Reset + Base
    =========================== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; overflow-x: hidden; overscroll-behavior-x: none; }
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
 
 body {
   font-family: var(--font);
@@ -44,6 +49,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
@@ -622,6 +628,8 @@ input, textarea, select { font-family: inherit; }
   z-index: 200;
   align-items: center; justify-content: center;
   padding: 20px;
+  overflow: hidden;
+  touch-action: pan-y;
 }
 .modal-overlay[style*="flex"] { display: flex !important; }
 
