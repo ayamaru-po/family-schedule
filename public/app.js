@@ -1040,7 +1040,11 @@ function showModal() {
 
   const ov = document.getElementById('modalOverlay');
   ov.style.display = 'flex';
-  requestAnimationFrame(() => document.getElementById('eventTitle').focus());
+  // iOS はキーボードが即座に出て画面がズレるので自動フォーカスしない
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isIOS) {
+    requestAnimationFrame(() => document.getElementById('eventTitle').focus());
+  }
 }
 
 function closeModal() {
