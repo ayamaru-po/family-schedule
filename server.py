@@ -138,6 +138,40 @@ def notification_scheduler():
         time_module.sleep(60)
 
 
+def send_push_except(exclude_user, title, body):
+    """指定ユーザー以外の全購読者にプッシュ通知を送信"""
+    if not VAPID_PRIVATE_KEY:
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return
+    all_subs = sb_request('GET', 'push_subscriptions')
+    if not all_subs:
+        return
+    subs = [s for s in all_subs if s.get('user_name') != exclude_user]
+    if not subs:
+        return
+    payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
+    dead = []
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    'endpoint': sub['endpoint'],
+                    'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={'sub': VAPID_SUBJECT}
+            )
+        except Exception as e:
+            print(f"Push error: {e}")
+            dead.append(sub['id'])
+    for sid in dead:
+        sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
+
+
 def send_push_all(title, body):
     """全購読者にプッシュ通知を送信"""
     if not VAPID_PRIVATE_KEY:
@@ -384,11 +418,11 @@ class Handler(BaseHTTPRequestHandler):
         saved = result[0] if isinstance(result, list) and result else event
         self.send_json(saved, 201)
         broadcast({'type': 'add', 'event': saved})
-        # Push通知
+        # Push通知（追加した本人以外に送る）
         added_by = saved.get('addedBy', '')
         title = saved.get('title', '新しい予定')
-        threading.Thread(target=send_push_all,
-            args=(f'📅 {added_by}が予定を追加', title), daemon=True).start()
+        threading.Thread(target=send_push_except,
+            args=(added_by, f'📅 {added_by}が予定を追加', title), daemon=True).start()
 
     def do_PUT(self):
         parts = self.path.split('/')
