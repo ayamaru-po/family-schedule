@@ -887,8 +887,17 @@ input[type="time"].form-input {
   box-sizing: border-box;
   text-align: left;
 }
-input[type="date"].form-input::-webkit-date-and-time-value {
+/* iOSの日付内部要素が中身に合わせて膨らむのを防ぐ */
+input[type="date"].form-input::-webkit-date-and-time-value,
+input[type="time"].form-input::-webkit-date-and-time-value {
   text-align: left;
+  margin: 0;
+  min-width: 0;
+}
+input[type="date"].form-input::-webkit-datetime-edit,
+input[type="time"].form-input::-webkit-datetime-edit {
+  padding: 0;
+  width: 100%;
 }
 
 /* Notify Toggle */
