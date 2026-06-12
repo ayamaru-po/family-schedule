@@ -35,8 +35,6 @@
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
 }
 
 body {
@@ -48,8 +46,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
 }
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
@@ -623,13 +619,11 @@ input, textarea, select { font-family: inherit; }
    =========================== */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(20,10,5,.45);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  background: rgba(20,10,5,.5);
   z-index: 200;
   align-items: center; justify-content: center;
   padding: 20px;
   overflow: hidden;
-  touch-action: pan-y;
 }
 .modal-overlay[style*="flex"] { display: flex !important; }
 

@@ -1368,32 +1368,4 @@ async function init() {
   }
 }
 
-// iOSビジュアルビューポートの横ズレを強制補正
-(function preventHorizontalShift() {
-  // touchmoveで横スクロールを阻止（モーダル内の縦スクロールは許可）
-  let _tx = 0, _ty = 0;
-  document.addEventListener('touchstart', ev => {
-    _tx = ev.touches[0].clientX;
-    _ty = ev.touches[0].clientY;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', ev => {
-    // ギャラリー内は自前で管理するのでスキップ
-    if (ev.target.closest('.gallery-overlay')) return;
-    const dx = Math.abs(ev.touches[0].clientX - _tx);
-    const dy = Math.abs(ev.touches[0].clientY - _ty);
-    // 横方向の動きが縦より大きい場合だけ阻止
-    if (dx > dy) ev.preventDefault();
-  }, { passive: false });
-
-  // visualViewportの横ズレを検知して補正
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('scroll', () => {
-      if (window.visualViewport.offsetLeft !== 0) {
-        window.scrollTo(window.visualViewport.offsetLeft, window.scrollY);
-      }
-    });
-  }
-})();
-
 init();
