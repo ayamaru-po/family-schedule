@@ -878,6 +878,19 @@ input, textarea, select { font-family: inherit; }
 .form-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
 .form-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
 
+/* iOS date/time入力欄の幅を揃える */
+input[type="date"].form-input,
+input[type="time"].form-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: left;
+}
+input[type="date"].form-input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 /* Notify Toggle */
 .notify-toggle-wrap {
   display: inline-flex; align-items: center; gap: 10px;
