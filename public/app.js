@@ -781,6 +781,21 @@ function renderImageGrid() {
     wrap.className = 'multi-img-thumb';
     const img = document.createElement('img');
     img.src = slot.type === 'pending' ? slot.previewSrc : slot.url;
+    // プレビューが表示できなくても📷アイコンで枠は出す
+    img.onerror = () => {
+      img.style.display = 'none';
+      wrap.style.background = '#FFF0E0';
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'center';
+      if (!wrap.querySelector('.thumb-fallback')) {
+        const ph = document.createElement('span');
+        ph.className = 'thumb-fallback';
+        ph.textContent = '📷';
+        ph.style.fontSize = '24px';
+        wrap.insertBefore(ph, wrap.firstChild);
+      }
+    };
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.className = 'image-remove-btn';
@@ -1192,15 +1207,16 @@ document.getElementById('imageUploadBtn').addEventListener('click', () => {
 document.getElementById('eventImage').addEventListener('change', e => {
   const files = Array.from(e.target.files);
   const remaining = MAX_IMAGES - imageSlots.length;
-  if (!files.length || remaining <= 0) return;
+  if (!files.length || remaining <= 0) {
+    document.getElementById('eventImage').value = '';
+    return;
+  }
   files.slice(0, remaining).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      imageSlots.push({ type: 'pending', file, previewSrc: ev.target.result });
-      renderImageGrid();
-    };
-    reader.readAsDataURL(file);
+    // createObjectURLは即座に生成でき、iOSのHEICもそのまま表示できる
+    const previewSrc = URL.createObjectURL(file);
+    imageSlots.push({ type: 'pending', file, previewSrc });
   });
+  renderImageGrid();
   document.getElementById('eventImage').value = '';
 });
 document.getElementById('modalOverlay').addEventListener('click', e => {
