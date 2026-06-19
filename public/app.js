@@ -840,6 +840,12 @@ function renderImageGrid() {
     grid.appendChild(wrap);
   });
   btn.style.display = imageSlots.length >= MAX_IMAGES ? 'none' : '';
+  // 選択中の枚数を表示（写真が登録されているか一目で分かる）
+  const counter = document.getElementById('imageCounter');
+  if (counter) {
+    counter.textContent = imageSlots.length
+      ? `選択中: ${imageSlots.length}枚` : '';
+  }
 }
 
 function resetImageUI() {
