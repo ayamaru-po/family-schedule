@@ -730,35 +730,66 @@ function updateDateDisplay() {
 /* ===========================
    Image helpers
    =========================== */
-function compressImage(file, maxWidth, quality) {
+// 画像を必ずJPEGに変換して縮小する（iOSのHEICカメラ写真にも対応）
+function canvasToJpeg(source, sw, sh, maxWidth, quality) {
+  let w = sw, h = sh;
+  if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(source, 0, 0, w, h);
   return new Promise(resolve => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    // 読み込み失敗（HEICなど）はオリジナルをそのまま使う
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let w = img.width, h = img.height;
-      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => {
-        // blobがnullまたは空の場合はオリジナルにフォールバック
-        resolve((blob && blob.size > 0) ? blob : file);
-      }, 'image/jpeg', quality);
-    };
-    img.src = url;
+    canvas.toBlob(blob => {
+      resolve((blob && blob.size > 0) ? blob : null);
+    }, 'image/jpeg', quality);
   });
+}
+
+async function compressImage(file, maxWidth, quality) {
+  // 方法1: createImageBitmap（iOSのHEICも確実にデコードできる）
+  if (window.createImageBitmap) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const blob = await canvasToJpeg(bitmap, bitmap.width, bitmap.height, maxWidth, quality);
+      bitmap.close && bitmap.close();
+      if (blob) return blob;
+    } catch (e) { console.warn('createImageBitmap failed', e); }
+  }
+  // 方法2: <img>経由（フォールバック）
+  try {
+    const blob = await new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+      img.onload = async () => {
+        URL.revokeObjectURL(url);
+        const b = await canvasToJpeg(img, img.naturalWidth, img.naturalHeight, maxWidth, quality);
+        b ? resolve(b) : reject(new Error('toBlob failed'));
+      };
+      img.src = url;
+    });
+    if (blob) return blob;
+  } catch (e) { console.warn('img compress failed', e); }
+  // どちらも失敗したらオリジナルを返す
+  return file;
 }
 
 async function uploadImageFile(file) {
   const compressed = await compressImage(file, 1200, 0.8);
-  const uploadFile = (compressed instanceof Blob && !(compressed instanceof File))
-    ? compressed
-    : compressed;
+  // 変換できたらJPEG、できなければ元の形式に合わせてファイル名を決める
+  const isJpeg = compressed instanceof Blob && /jpeg|jpg/i.test(compressed.type || '');
+  let fname = 'photo.jpg';
+  if (!isJpeg) {
+    const t = (compressed.type || '').toLowerCase();
+    if (t.includes('png')) fname = 'photo.png';
+    else if (t.includes('heic')) fname = 'photo.heic';
+    else if (t.includes('webp')) fname = 'photo.webp';
+    else if (compressed.name && compressed.name.includes('.')) fname = compressed.name;
+  }
   const fd = new FormData();
-  fd.append('file', uploadFile, 'photo.jpg');
+  fd.append('file', compressed, fname);
   const resp = await fetch(`${BASE_URL}/api/upload`, { method: 'POST', body: fd });
   if (!resp.ok) {
     let detail = '';
