@@ -1128,6 +1128,7 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
     addedBy:        currentUser,
     notify_enabled: document.getElementById('eventNotify').checked,
     notified:       false,
+    reminded_daybefore: false,
   };
   if (editingId) data.id = editingId;
 

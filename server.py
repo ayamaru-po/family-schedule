@@ -10,7 +10,7 @@ import uuid
 import threading
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, quote as urlquote
 import urllib.parse
@@ -85,46 +85,57 @@ def send_push_to_user(user_name, title, body):
         sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
 
 
+def _notify_target(added_by, title, body):
+    """addedByがいればその人だけ、いなければ全員に通知"""
+    if added_by:
+        threading.Thread(target=send_push_to_user,
+                         args=(added_by, title, body), daemon=True).start()
+    else:
+        threading.Thread(target=send_push_all,
+                         args=(title, body), daemon=True).start()
+
+
 def check_and_send_notifications():
-    """通知が必要なイベントをチェックして送信"""
-    now = datetime.now()
+    """通知が必要なイベントをチェックして送信（日本時間基準）"""
+    # Renderのサーバー時刻はUTCなので+9時間して日本時間にする
+    now = datetime.utcnow() + timedelta(hours=9)
     try:
         pending = sb_request('GET', 'events',
-                             params='?notify_enabled=eq.true&notified=eq.false')
+                             params='?notify_enabled=eq.true')
     except Exception as e:
         print(f"Notification check error: {e}")
         return
     for event in pending:
         date_str = event.get('date', '')
-        time_str = event.get('startTime') or '08:00'
         if not date_str:
             continue
+        time_str = event.get('startTime') or '08:00'
         try:
             event_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         except Exception:
             continue
-        diff_sec = (event_dt - now).total_seconds()
-        # イベント時間の前後1分以内に通知
-        if -60 <= diff_sec <= 60:
-            added_by = event.get('addedBy', '')
-            event_title = event.get('title', '予定の時間です')
-            notif_title = f'⏰ {event_title}'
-            notif_body = f'{time_str} の予定の時間です'
-            if added_by:
-                threading.Thread(
-                    target=send_push_to_user,
-                    args=(added_by, notif_title, notif_body),
-                    daemon=True
-                ).start()
-            else:
-                threading.Thread(
-                    target=send_push_all,
-                    args=(notif_title, notif_body),
-                    daemon=True
-                ).start()
-            # 送信済みフラグを立てる（二重送信防止）
-            sb_request('PATCH', 'events', {'notified': True},
-                       params=f'?id=eq.{event["id"]}')
+        added_by = event.get('addedBy', '')
+        event_title = event.get('title', '予定')
+
+        # ① 前日の夜20時にリマインド
+        if not event.get('reminded_daybefore'):
+            remind_dt = datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)
+            remind_dt = remind_dt.replace(hour=20, minute=0)
+            if -60 <= (remind_dt - now).total_seconds() <= 60:
+                t = event.get('startTime')
+                when = f'明日 {t} ' if t else '明日 '
+                _notify_target(added_by, f'🔔 {when}{event_title}',
+                               f'明日「{event_title}」の予定があります')
+                sb_request('PATCH', 'events', {'reminded_daybefore': True},
+                           params=f'?id=eq.{event["id"]}')
+
+        # ② 当日の予定時間に通知
+        if not event.get('notified'):
+            if -60 <= (event_dt - now).total_seconds() <= 60:
+                _notify_target(added_by, f'⏰ {event_title}',
+                               f'{time_str} の予定の時間です')
+                sb_request('PATCH', 'events', {'notified': True},
+                           params=f'?id=eq.{event["id"]}')
 
 
 def notification_scheduler():
