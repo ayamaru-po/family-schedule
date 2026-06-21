@@ -247,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def read_body(self):
@@ -259,8 +260,12 @@ class Handler(BaseHTTPRequestHandler):
             path = '/index.html'
         file_path = os.path.join(public_dir, path.lstrip('/'))
         if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            msg = b'Not Found'
             self.send_response(404)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Content-Length', str(len(msg)))
             self.end_headers()
+            self.wfile.write(msg)
             return
         ext = os.path.splitext(file_path)[1]
         types = {'.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript'}
