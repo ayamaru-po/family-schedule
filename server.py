@@ -437,8 +437,30 @@ class Handler(BaseHTTPRequestHandler):
         # Push通知（追加した本人以外に送る）
         added_by = saved.get('addedBy', '')
         title = saved.get('title', '新しい予定')
+        # 通知本文に「何日の予定か」を入れる（例: 6/21(土) 9:30 タイトル）
+        date_str = saved.get('date', '')
+        when = ''
+        if date_str:
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                dow = ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
+                when = f'{dt.month}/{dt.day}({dow})'
+                end_str = saved.get('endDate')
+                if end_str and end_str != date_str:
+                    try:
+                        ed = datetime.strptime(end_str, "%Y-%m-%d")
+                        edow = ['月', '火', '水', '木', '金', '土', '日'][ed.weekday()]
+                        when += f'〜{ed.month}/{ed.day}({edow})'
+                    except Exception:
+                        pass
+                st = saved.get('startTime')
+                if st:
+                    when += f' {st}'
+            except Exception:
+                pass
+        notif_body = f'{when} {title}'.strip() if when else title
         threading.Thread(target=send_push_except,
-            args=(added_by, f'📅 {added_by}が予定を追加', title), daemon=True).start()
+            args=(added_by, f'📅 {added_by}が予定を追加', notif_body), daemon=True).start()
 
     def do_PUT(self):
         parts = self.path.split('/')
