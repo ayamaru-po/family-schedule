@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
   <link rel="apple-touch-icon" href="icon-tako.png">
   <link rel="icon" type="image/png" href="icon-tako.png">
   <!-- フルスクリーン(standalone)を無効化：カメラ撮影がiOSの不具合で消える問題を回避 -->
@@ -28,7 +28,7 @@
       <div class="header-brand">
         <img src="family.png" class="header-family-img" alt="家族">
         <div class="brand-text">
-          <span class="brand-name">家族カレンダー</span>
+          <span class="brand-name">家族カレンダー <span id="seasonEmoji" class="season-emoji"></span></span>
           <span class="brand-sub">みんなの予定を共有しよう</span>
         </div>
         <div class="connection-badge" id="connectionStatus">
@@ -47,6 +47,9 @@
 
   <!-- メイン -->
   <main class="main">
+
+    <!-- 今日の予定バナー -->
+    <div class="today-banner" id="todayBanner"></div>
 
     <!-- カレンダーセクション -->
     <section class="calendar-section">
@@ -132,6 +135,7 @@
         <div id="detailImagesWrap" style="display:none">
           <div class="detail-imgs-grid" id="detailImgsGrid"></div>
         </div>
+        <div class="detail-reactions" id="detailReactions"></div>
         <div class="detail-actions">
           <button type="button" class="btn btn-secondary" id="detailCloseBtn">閉じる</button>
           <button type="button" class="btn btn-primary" id="detailEditBtn">
@@ -214,6 +218,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=32"></script>
+  <script src="app.js?v=33"></script>
 </body>
 </html>

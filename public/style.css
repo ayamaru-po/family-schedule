@@ -902,6 +902,88 @@ input[type="time"].form-input::-webkit-datetime-edit {
   padding: 0;
 }
 
+/* ===========================
+   今日の予定バナー
+   =========================== */
+.today-banner {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #FFF6E8, #FFEFF5);
+  border: 2px solid #FFD9A8;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.today-banner-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 10px;
+}
+.today-banner-title { font-size: 16px; font-weight: 800; color: var(--text); }
+.today-banner-date  { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.today-banner-empty { font-size: 13.5px; color: var(--text-2); padding: 2px 0 2px 4px; }
+.today-bday {
+  background: linear-gradient(90deg, #FFE3EC, #FFF3D6);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13.5px; font-weight: 700;
+  margin-bottom: 10px;
+}
+.today-banner-list { display: flex; flex-direction: column; gap: 6px; }
+.today-banner-item {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.75);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.today-banner-item:hover { background: white; transform: translateX(2px); }
+.today-item-bar   { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+.today-item-time  { font-size: 12px; font-weight: 800; color: var(--text-2); min-width: 42px; }
+.today-item-title { font-size: 13.5px; font-weight: 600; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-item-reaction { font-size: 11.5px; font-weight: 700; color: #E8863C; }
+
+/* ===========================
+   誕生日ケーキ
+   =========================== */
+.bday-cake { font-size: 12px; line-height: 1; display: inline-block; margin-left: 2px; }
+
+/* ===========================
+   季節の絵文字
+   =========================== */
+.season-emoji { display: inline-block; cursor: pointer; }
+.season-emoji.pop { animation: emoji-pop .5s ease; }
+@keyframes emoji-pop {
+  0%   { transform: scale(1) rotate(0); }
+  30%  { transform: scale(1.6) rotate(-12deg); }
+  60%  { transform: scale(1.2) rotate(10deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* ===========================
+   了解スタンプ
+   =========================== */
+.detail-reactions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 4px 0 2px;
+}
+.reaction-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  font-size: 13.5px; font-weight: 700;
+  color: var(--text-2);
+  transition: all .15s;
+}
+.reaction-btn.active {
+  background: linear-gradient(135deg, #FFB347, #FF9060);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 2px 8px rgba(255,150,80,.35);
+}
+.reaction-btn:not(.active):hover { border-color: #FFB347; color: var(--text); }
+.reaction-names { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+
 /* Notify Toggle */
 .notify-toggle-wrap {
   display: inline-flex; align-items: center; gap: 10px;

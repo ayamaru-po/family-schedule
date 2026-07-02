@@ -50,6 +50,19 @@ const BASE_URL = (location.hostname === 'localhost' || location.hostname === '12
   : '';
 
 /* ===========================
+   家族の誕生日（月-日 → 名前）
+   =========================== */
+const BIRTHDAYS = {
+  '07-15': '貴之',
+  '11-12': '亜耶',
+  '11-11': '凌',
+  '04-04': '慶',
+};
+
+/* 月ごとの季節絵文字 */
+const SEASON_EMOJI = ['🎍','👹','🌸','🌷','🎏','☔','🎋','🍉','🌕','🎃','🍁','🎄'];
+
+/* ===========================
    State
    =========================== */
 let events        = [];
@@ -220,9 +233,77 @@ function visible() {
    Render – all
    =========================== */
 function renderAll() {
+  renderTodayBanner();
   renderCalendar();
   renderDayEvents();
   renderUpcoming();
+}
+
+/* ===========================
+   今日の予定バナー
+   =========================== */
+function renderTodayBanner() {
+  const el = document.getElementById('todayBanner');
+  if (!el) return;
+  const ds = toDateStr(new Date());
+  const evs = visible().filter(ev =>
+    ev.date === ds || (ev.endDate && ev.date <= ds && ev.endDate >= ds)
+  ).sort((a, b) => (a.startTime||'99').localeCompare(b.startTime||'99'));
+
+  el.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'today-banner-head';
+  head.innerHTML = `<span class="today-banner-title">☀️ 今日の予定</span><span class="today-banner-date">${formatDateJP(ds)}</span>`;
+  el.appendChild(head);
+
+  // 誕生日のお祝い
+  const bday = BIRTHDAYS[ds.slice(5)];
+  if (bday) {
+    const b = document.createElement('div');
+    b.className = 'today-bday';
+    b.textContent = `🎂 今日は${bday}の誕生日！おめでとう！🎉`;
+    el.appendChild(b);
+  }
+
+  if (!evs.length) {
+    const empty = document.createElement('div');
+    empty.className = 'today-banner-empty';
+    empty.textContent = '今日の予定はありません 🍵';
+    el.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'today-banner-list';
+  evs.forEach(ev => {
+    const item = document.createElement('div');
+    item.className = 'today-banner-item';
+    const bar = document.createElement('span');
+    bar.className = 'today-item-bar';
+    bar.style.background = colorOf(membersOf(ev)[0] || '');
+    const time = document.createElement('span');
+    time.className = 'today-item-time';
+    time.textContent = ev.startTime ? formatTime(ev.startTime) : '終日';
+    const title = document.createElement('span');
+    title.className = 'today-item-title';
+    title.textContent = ev.title;
+    item.appendChild(bar);
+    item.appendChild(time);
+    item.appendChild(title);
+    // 了解スタンプの人数表示
+    let rc = [];
+    try { rc = JSON.parse(ev.reactions || '[]'); } catch {}
+    if (rc.length) {
+      const r = document.createElement('span');
+      r.className = 'today-item-reaction';
+      r.textContent = `👍${rc.length}`;
+      item.appendChild(r);
+    }
+    item.addEventListener('click', () => openDetail(ev));
+    list.appendChild(item);
+  });
+  el.appendChild(list);
 }
 
 /* ===========================
@@ -286,6 +367,16 @@ function renderCalendar() {
     num.className = 'day-num';
     num.textContent = d.getDate();
     cell.appendChild(num);
+
+    // 誕生日ケーキ
+    const bdayName = BIRTHDAYS[ds.slice(5)];
+    if (bdayName && !other) {
+      const cake = document.createElement('span');
+      cake.className = 'bday-cake';
+      cake.textContent = '🎂';
+      cake.title = `${bdayName}の誕生日`;
+      cell.appendChild(cake);
+    }
 
     if (isHoliday && !other) {
       const hl = document.createElement('div');
@@ -362,6 +453,16 @@ function renderWeekView() {
     num.className = 'day-num';
     num.textContent = d.getDate();
     cell.appendChild(num);
+
+    // 誕生日ケーキ
+    const bdayName = BIRTHDAYS[ds.slice(5)];
+    if (bdayName) {
+      const cake = document.createElement('span');
+      cake.className = 'bday-cake';
+      cake.textContent = '🎂';
+      cake.title = `${bdayName}の誕生日`;
+      cell.appendChild(cake);
+    }
 
     if (isHoliday) {
       const hl = document.createElement('div');
@@ -1033,9 +1134,58 @@ function openDetail(ev) {
     imgWrap.style.display = 'none';
   }
 
+  // 了解スタンプ
+  renderReactions(ev);
+
   // 編集ボタン
   document.getElementById('detailEditBtn').onclick = () => openEdit(ev);
   showModal();
+}
+
+/* ===========================
+   了解スタンプ（👍）
+   =========================== */
+function renderReactions(ev) {
+  const wrap = document.getElementById('detailReactions');
+  if (!wrap) return;
+  let list = [];
+  try { list = JSON.parse(ev.reactions || '[]'); } catch {}
+  const me = localStorage.getItem('myName') || currentUser;
+  const mine = list.includes(me);
+
+  wrap.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'reaction-btn' + (mine ? ' active' : '');
+  btn.textContent = mine ? '👍 了解済み' : '👍 了解';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const next = mine ? list.filter(n => n !== me) : [...list, me];
+    try {
+      const r = await fetch(`${BASE_URL}/api/events/${ev.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reactions: JSON.stringify(next) })
+      });
+      if (!r.ok) throw new Error();
+      const saved = await r.json();
+      const i = events.findIndex(e => e.id === ev.id);
+      if (i >= 0) events[i] = saved;
+      renderReactions(saved);
+      renderAll();
+    } catch {
+      alert('送信に失敗しました。もう一度試してください');
+      btn.disabled = false;
+    }
+  });
+  wrap.appendChild(btn);
+
+  if (list.length) {
+    const names = document.createElement('span');
+    names.className = 'reaction-names';
+    names.textContent = `${list.join('・')} が了解👌`;
+    wrap.appendChild(names);
+  }
 }
 
 function openAdd(dateStr) {
@@ -1421,5 +1571,17 @@ async function init() {
     });
   }
 }
+
+// 季節の絵文字（月ごとに変わる・タップで跳ねる）
+(function initSeasonEmoji() {
+  const el = document.getElementById('seasonEmoji');
+  if (!el) return;
+  el.textContent = SEASON_EMOJI[new Date().getMonth()];
+  el.addEventListener('click', () => {
+    el.classList.remove('pop');
+    void el.offsetWidth; // アニメーションをリセット
+    el.classList.add('pop');
+  });
+})();
 
 init();
