@@ -1282,13 +1282,32 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
   };
   if (editingId) data.id = editingId;
 
+  // 入力エラーを赤枠＋アラートで知らせる共通処理
+  function inputError(id, message) {
+    const input = document.getElementById(id);
+    input.focus();
+    input.classList.add('input-error');
+    input.addEventListener('input', () => input.classList.remove('input-error'), { once: true });
+    alert(message);
+  }
+
+  // 終了日が開始日より前はエラー
+  if (data.endDate && data.endDate < data.date) {
+    inputError('eventEndDate', '終了日が開始日より前になっています。日付を確認してください');
+    return;
+  }
+
+  // 同じ日で終了時刻が開始時刻より前はエラー
+  if (data.startTime && data.endTime
+      && (!data.endDate || data.endDate === data.date)
+      && data.endTime < data.startTime) {
+    inputError('eventEndTime', '終了時刻が開始時刻より前になっています。時刻を確認してください');
+    return;
+  }
+
   // 通知ONなのに時刻が空の場合はエラー
   if (data.notify_enabled && !data.startTime) {
-    const timeInput = document.getElementById('eventStartTime');
-    timeInput.focus();
-    timeInput.classList.add('input-error');
-    timeInput.addEventListener('input', () => timeInput.classList.remove('input-error'), { once: true });
-    alert('通知をONにする場合は「開始時刻」を入力してください');
+    inputError('eventStartTime', '通知をONにする場合は「開始時刻」を入力してください');
     return;
   }
 
