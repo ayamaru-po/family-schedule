@@ -832,15 +832,20 @@ function updateDateDisplay() {
    Image helpers
    =========================== */
 // 画像を必ずJPEGに変換して縮小する（iOSのHEICカメラ写真にも対応）
-function canvasToJpeg(source, sw, sh, maxWidth, quality) {
+function canvasToJpeg(source, sw, sh, maxWidth, quality, rotation = 0) {
   let w = sw, h = sh;
   if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+  const rot = ((rotation % 360) + 360) % 360;
   const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
+  // 90度・270度回転は縦横が入れ替わる
+  if (rot === 90 || rot === 270) { canvas.width = h; canvas.height = w; }
+  else { canvas.width = w; canvas.height = h; }
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(source, 0, 0, w, h);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(rot * Math.PI / 180);
+  ctx.drawImage(source, -w / 2, -h / 2, w, h);
   return new Promise(resolve => {
     canvas.toBlob(blob => {
       resolve((blob && blob.size > 0) ? blob : null);
@@ -848,12 +853,12 @@ function canvasToJpeg(source, sw, sh, maxWidth, quality) {
   });
 }
 
-async function compressImage(file, maxWidth, quality) {
+async function compressImage(file, maxWidth, quality, rotation = 0) {
   // 方法1: createImageBitmap（iOSのHEICも確実にデコードできる）
   if (window.createImageBitmap) {
     try {
       const bitmap = await createImageBitmap(file);
-      const blob = await canvasToJpeg(bitmap, bitmap.width, bitmap.height, maxWidth, quality);
+      const blob = await canvasToJpeg(bitmap, bitmap.width, bitmap.height, maxWidth, quality, rotation);
       bitmap.close && bitmap.close();
       if (blob) return blob;
     } catch (e) { console.warn('createImageBitmap failed', e); }
@@ -866,7 +871,7 @@ async function compressImage(file, maxWidth, quality) {
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
       img.onload = async () => {
         URL.revokeObjectURL(url);
-        const b = await canvasToJpeg(img, img.naturalWidth, img.naturalHeight, maxWidth, quality);
+        const b = await canvasToJpeg(img, img.naturalWidth, img.naturalHeight, maxWidth, quality, rotation);
         b ? resolve(b) : reject(new Error('toBlob failed'));
       };
       img.src = url;
@@ -877,8 +882,8 @@ async function compressImage(file, maxWidth, quality) {
   return file;
 }
 
-async function uploadImageFile(file) {
-  const compressed = await compressImage(file, 1200, 0.8);
+async function uploadImageFile(file, rotation = 0) {
+  const compressed = await compressImage(file, 1200, 0.8, rotation);
   // 変換できたらJPEG、できなければ元の形式に合わせてファイル名を決める
   const isJpeg = compressed instanceof Blob && /jpeg|jpg/i.test(compressed.type || '');
   let fname = 'photo.jpg';
@@ -913,6 +918,8 @@ function renderImageGrid() {
     wrap.className = 'multi-img-thumb';
     const img = document.createElement('img');
     img.src = slot.type === 'pending' ? slot.previewSrc : slot.url;
+    // 回転プレビュー（保存時にこの向きで画像が作られる）
+    if (slot.rotation) img.style.transform = `rotate(${slot.rotation}deg)`;
     // プレビューが表示できなくても📷アイコンで枠は出す
     img.onerror = () => {
       img.style.display = 'none';
@@ -938,6 +945,19 @@ function renderImageGrid() {
     });
     wrap.appendChild(img);
     wrap.appendChild(rm);
+    // 未アップロードの写真は回転ボタンで向きを変えられる
+    if (slot.type === 'pending') {
+      const rot = document.createElement('button');
+      rot.type = 'button';
+      rot.className = 'image-rotate-btn';
+      rot.textContent = '↻';
+      rot.title = '写真を回転';
+      rot.addEventListener('click', () => {
+        slot.rotation = ((slot.rotation || 0) + 90) % 360;
+        renderImageGrid();
+      });
+      wrap.appendChild(rot);
+    }
     grid.appendChild(wrap);
   });
   btn.style.display = imageSlots.length >= MAX_IMAGES ? 'none' : '';
@@ -1320,7 +1340,7 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
       saveBtn.textContent = `写真をアップロード中... (0/${pendingSlots.length})`;
       for (let i = 0; i < pendingSlots.length; i++) {
         saveBtn.textContent = `写真をアップロード中... (${i+1}/${pendingSlots.length})`;
-        const url = await uploadImageFile(pendingSlots[i].file);
+        const url = await uploadImageFile(pendingSlots[i].file, pendingSlots[i].rotation || 0);
         pendingSlots[i].type = 'saved';
         pendingSlots[i].url  = url;
       }
