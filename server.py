@@ -138,6 +138,49 @@ def check_and_send_notifications():
                            params=f'?id=eq.{event["id"]}')
 
 
+_weekly_sent_date = None
+
+def check_weekly_summary():
+    """日曜の夜20時に、翌週（月〜日）の予定まとめを全員に通知"""
+    global _weekly_sent_date
+    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
+    if now.weekday() != 6:  # 日曜だけ
+        return
+    target = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    if abs((now - target).total_seconds()) > 60:
+        return
+    today_str = now.strftime('%Y-%m-%d')
+    if _weekly_sent_date == today_str:  # 二重送信防止
+        return
+    _weekly_sent_date = today_str
+
+    try:
+        evs = sb_request('GET', 'events', params='?order=date')
+    except Exception as e:
+        print(f"Weekly summary error: {e}")
+        return
+
+    dows = ['月', '火', '水', '木', '金', '土', '日']
+    lines = []
+    for i in range(1, 8):  # 明日(月)から7日分
+        d = now + timedelta(days=i)
+        ds = d.strftime('%Y-%m-%d')
+        day_evs = [e for e in evs if e.get('date') == ds]
+        day_evs.sort(key=lambda e: e.get('startTime') or '99')
+        for e in day_evs:
+            t = e.get('startTime')
+            lines.append(f"{d.month}/{d.day}({dows[d.weekday()]}) {(t + ' ') if t else ''}{e.get('title', '')}")
+
+    if lines:
+        body = '\n'.join(lines[:12])
+        if len(lines) > 12:
+            body += f'\nほか{len(lines) - 12}件'
+    else:
+        body = '今週は登録された予定がありません🍵'
+    threading.Thread(target=send_push_all,
+                     args=('📋 今週の予定', body), daemon=True).start()
+
+
 def notification_scheduler():
     """バックグラウンドで1分ごとに通知チェック"""
     import time as time_module
@@ -146,6 +189,10 @@ def notification_scheduler():
             check_and_send_notifications()
         except Exception as e:
             print(f"Scheduler error: {e}")
+        try:
+            check_weekly_summary()
+        except Exception as e:
+            print(f"Weekly scheduler error: {e}")
         time_module.sleep(60)
 
 

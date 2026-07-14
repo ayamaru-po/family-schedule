@@ -1611,6 +1611,81 @@ async function init() {
   }
 }
 
+/* ===========================
+   予定の検索
+   =========================== */
+function openSearch() {
+  const ov = document.getElementById('searchOverlay');
+  ov.style.display = 'flex';
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  renderSearchResults('');
+  setTimeout(() => input.focus(), 60);
+}
+
+function closeSearch() {
+  document.getElementById('searchOverlay').style.display = 'none';
+}
+
+function renderSearchResults(q) {
+  const box = document.getElementById('searchResults');
+  box.innerHTML = '';
+  const query = q.trim().toLowerCase();
+  if (!query) {
+    box.innerHTML = '<div class="search-hint">キーワードを入力してください 🔍</div>';
+    return;
+  }
+  const today = toDateStr(new Date());
+  const hits = events.filter(ev =>
+    (ev.title || '').toLowerCase().includes(query) ||
+    (ev.note  || '').toLowerCase().includes(query)
+  );
+  // これからの予定を近い順→過去の予定を新しい順
+  const future = hits.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+  const past   = hits.filter(e => e.date <  today).sort((a, b) => b.date.localeCompare(a.date));
+  const all = [...future, ...past].slice(0, 50);
+
+  if (!all.length) {
+    box.innerHTML = '<div class="search-hint">見つかりませんでした 🙏</div>';
+    return;
+  }
+  all.forEach(ev => {
+    const item = document.createElement('div');
+    item.className = 'search-result-item' + (ev.date < today ? ' past' : '');
+
+    const dot = document.createElement('span');
+    dot.className = 'search-dot';
+    dot.style.background = colorOf(membersOf(ev)[0] || '');
+
+    const date = document.createElement('span');
+    date.className = 'search-date';
+    date.textContent = formatDateShort(ev.date) + (ev.startTime ? ' ' + formatTime(ev.startTime) : '');
+
+    const title = document.createElement('span');
+    title.className = 'search-title';
+    title.textContent = ev.title;
+
+    item.appendChild(dot);
+    item.appendChild(date);
+    item.appendChild(title);
+    if (getImageUrls(ev).length) {
+      const cam = document.createElement('span');
+      cam.className = 'search-cam';
+      cam.textContent = '📷';
+      item.appendChild(cam);
+    }
+    item.addEventListener('click', () => { closeSearch(); openDetail(ev); });
+    box.appendChild(item);
+  });
+}
+
+document.getElementById('searchBtn').addEventListener('click', openSearch);
+document.getElementById('searchClose').addEventListener('click', closeSearch);
+document.getElementById('searchOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeSearch();
+});
+document.getElementById('searchInput').addEventListener('input', e => renderSearchResults(e.target.value));
+
 // 季節の絵文字（月ごとに変わる・タップで跳ねる）
 (function initSeasonEmoji() {
   const el = document.getElementById('seasonEmoji');
