@@ -596,7 +596,7 @@ function renderUpcoming() {
 
     const dot = document.createElement('div');
     dot.className = 'upcoming-dot';
-    dot.style.background = colorOf(ev.member);
+    dot.style.background = colorOf(membersOf(ev)[0] || '');
 
     const date = document.createElement('div');
     date.className = 'upcoming-date';
