@@ -177,8 +177,8 @@ def check_weekly_summary():
             body += f'\nほか{len(lines) - 12}件'
     else:
         body = '今週は登録された予定がありません🍵'
-    ＃　threading.Thread(target=send_push_all,
-                     args=('📋 今週の予定', body), daemon=True).start()
+    #　threading.Thread(target=send_push_all,
+                     #args=('📋 今週の予定', body), daemon=True).start()
 
 
 def notification_scheduler():
@@ -537,7 +537,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     # 通知スケジューラーをバックグラウンドで起動
-    ＃threading.Thread(target=notification_scheduler, daemon=True).start()
+    #threading.Thread(target=notification_scheduler, daemon=True).start()
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     import socket
     hostname = socket.gethostname()
