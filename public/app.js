@@ -1325,11 +1325,7 @@ document.getElementById('eventForm').addEventListener('submit', async e => {
     return;
   }
 
-  // 通知ONなのに時刻が空の場合はエラー
-  if (data.notify_enabled && !data.startTime) {
-    inputError('eventStartTime', '通知をONにする場合は「開始時刻」を入力してください');
-    return;
-  }
+  // 通知は前日20時固定（cronで送信）なので、開始時刻の有無は通知に影響しない
 
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
