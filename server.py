@@ -21,6 +21,7 @@ SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
 VAPID_PUBLIC_KEY  = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 VAPID_SUBJECT     = os.environ.get('VAPID_SUBJECT', 'mailto:family@example.com')
+NOTIFY_TOKEN      = os.environ.get('NOTIFY_TOKEN', '')  # /api/cron/notify 用の合言葉
 
 DEFAULT_MEMBERS = ["貴之", "亜耶", "凌", "慶", "家族全員"]
 
@@ -95,6 +96,18 @@ def _notify_target(added_by, title, body):
                          args=(title, body), daemon=True).start()
 
 
+def _send_daybefore(event):
+    """1件の予定について「前日通知」を送り、送信済みフラグを立てる"""
+    added_by = event.get('addedBy', '')
+    event_title = event.get('title', '予定')
+    t = event.get('startTime')
+    when = f'明日 {t} ' if t else '明日 '
+    _notify_target(added_by, f'🔔 {when}{event_title}',
+                   f'明日「{event_title}」の予定があります')
+    sb_request('PATCH', 'events', {'reminded_daybefore': True},
+               params=f'?id=eq.{event["id"]}')
+
+
 def check_and_send_notifications():
     """通知が必要なイベントをチェックして送信（日本時間基準）"""
     # Renderのサーバー時刻はUTCなので+9時間して日本時間にする
@@ -122,12 +135,7 @@ def check_and_send_notifications():
             remind_dt = datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)
             remind_dt = remind_dt.replace(hour=20, minute=0)
             if -60 <= (remind_dt - now).total_seconds() <= 60:
-                t = event.get('startTime')
-                when = f'明日 {t} ' if t else '明日 '
-                _notify_target(added_by, f'🔔 {when}{event_title}',
-                               f'明日「{event_title}」の予定があります')
-                sb_request('PATCH', 'events', {'reminded_daybefore': True},
-                           params=f'?id=eq.{event["id"]}')
+                _send_daybefore(event)
 
         # ② 当日の予定時間に通知
         if not event.get('notified'):
@@ -140,25 +148,14 @@ def check_and_send_notifications():
 
 _weekly_sent_date = None
 
-def check_weekly_summary():
-    """日曜の夜20時に、翌週（月〜日）の予定まとめを全員に通知"""
-    global _weekly_sent_date
+def _send_weekly_summary():
+    """翌週（明日から7日分）の予定まとめを全員に通知する"""
     now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
-    if now.weekday() != 6:  # 日曜だけ
-        return
-    target = now.replace(hour=20, minute=0, second=0, microsecond=0)
-    if abs((now - target).total_seconds()) > 60:
-        return
-    today_str = now.strftime('%Y-%m-%d')
-    if _weekly_sent_date == today_str:  # 二重送信防止
-        return
-    _weekly_sent_date = today_str
-
     try:
         evs = sb_request('GET', 'events', params='?order=date')
     except Exception as e:
         print(f"Weekly summary error: {e}")
-        return
+        return False
 
     dows = ['月', '火', '水', '木', '金', '土', '日']
     lines = []
@@ -177,8 +174,25 @@ def check_weekly_summary():
             body += f'\nほか{len(lines) - 12}件'
     else:
         body = '今週は登録された予定がありません🍵'
-    #　threading.Thread(target=send_push_all,
-                     #args=('📋 今週の予定', body), daemon=True).start()
+    threading.Thread(target=send_push_all,
+                     args=('📋 今週の予定', body), daemon=True).start()
+    return True
+
+
+def check_weekly_summary():
+    """日曜の夜20時に、翌週（月〜日）の予定まとめを全員に通知"""
+    global _weekly_sent_date
+    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
+    if now.weekday() != 6:  # 日曜だけ
+        return
+    target = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    if abs((now - target).total_seconds()) > 60:
+        return
+    today_str = now.strftime('%Y-%m-%d')
+    if _weekly_sent_date == today_str:  # 二重送信防止
+        return
+    _weekly_sent_date = today_str
+    _send_weekly_summary()
 
 
 def notification_scheduler():
@@ -194,6 +208,46 @@ def notification_scheduler():
         except Exception as e:
             print(f"Weekly scheduler error: {e}")
         time_module.sleep(60)
+
+
+def run_cron_notify():
+    """外部cronから1日1回叩かれる想定の通知処理（ループしない）。
+    ・翌日の予定があれば「前日通知」を送る
+    ・その日が日曜なら「今週の予定」まとめも送る
+    ・当日通知は送らない
+    """
+    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
+    tomorrow = (now + timedelta(days=1)).strftime('%Y-%m-%d')
+
+    # --- 翌日の予定について前日通知（check_and_send_notifications と同じ送信処理を再利用）---
+    daybefore_sent = 0
+    try:
+        pending = sb_request('GET', 'events', params='?notify_enabled=eq.true')
+    except Exception as e:
+        print(f"Cron daybefore error: {e}")
+        pending = []
+    for event in pending:
+        if event.get('date') != tomorrow:
+            continue
+        if event.get('reminded_daybefore'):  # 二重送信防止
+            continue
+        _send_daybefore(event)
+        daybefore_sent += 1
+
+    # --- 日曜なら今週の予定まとめ ---
+    weekly_sent = False
+    if now.weekday() == 6:  # 日曜
+        weekly_sent = _send_weekly_summary()
+
+    result = {
+        'ok': True,
+        'ranAt': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'tomorrow': tomorrow,
+        'dayBeforeSent': daybefore_sent,
+        'weeklySummarySent': weekly_sent,
+    }
+    print(f"Cron notify: {result}")
+    return result
 
 
 def send_push_except(exclude_user, title, body):
@@ -355,6 +409,16 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 if self in sse_clients:
                     sse_clients.remove(self)
+            return
+
+        # 外部cron（cron-job.org など）から叩く通知窓口。tokenが一致した時だけ実行
+        if path == '/api/cron/notify':
+            qs = urllib.parse.parse_qs(parsed.query)
+            token = (qs.get('token') or [''])[0]
+            if not NOTIFY_TOKEN or token != NOTIFY_TOKEN:
+                self.send_json({'error': 'forbidden'}, 403)
+                return
+            self.send_json(run_cron_notify())
             return
 
         if path == '/api/push/test':
@@ -536,8 +600,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    # 通知スケジューラーをバックグラウンドで起動
-    #threading.Thread(target=notification_scheduler, daemon=True).start()
+    # 通知スケジューラーは無効化（Render無料枠対策で常時起動しないようにするため）。
+    # 通知は外部cronから GET /api/cron/notify を叩いて実行する。復活させないこと。
+    # threading.Thread(target=notification_scheduler, daemon=True).start()
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     import socket
     hostname = socket.gethostname()
