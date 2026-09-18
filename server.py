@@ -10,9 +10,9 @@ import uuid
 import threading
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, quote as urlquote
+from urllib.parse import urlparse
 import urllib.parse
 
 PORT = int(os.environ.get('PORT', 3000))
@@ -25,8 +25,13 @@ NOTIFY_TOKEN      = os.environ.get('NOTIFY_TOKEN', '')  # /api/cron/notify 用�
 
 DEFAULT_MEMBERS = ["貴之", "亜耶", "凌", "慶", "家族全員"]
 
-lock = threading.Lock()
+JST = timezone(timedelta(hours=9))
 sse_clients = []
+
+
+def now_jst():
+    """日本時間の現在時刻（Renderのサーバー時刻はUTCなので明示的に変換）"""
+    return datetime.now(JST)
 
 
 def sb_request(method, path, data=None, params=''):
@@ -54,17 +59,13 @@ def load_events():
     return sb_request('GET', 'events', params='?order=date')
 
 
-def send_push_to_user(user_name, title, body):
-    """特定ユーザーにプッシュ通知を送信"""
-    if not VAPID_PRIVATE_KEY:
+def _push_to_subs(subs, title, body):
+    """購読者リストにプッシュ通知を送る共通処理。失効した購読は削除する"""
+    if not VAPID_PRIVATE_KEY or not subs:
         return
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
     except ImportError:
-        return
-    subs = sb_request('GET', 'push_subscriptions',
-                      params=f'?user_name=eq.{urllib.parse.quote(user_name, safe="")}')
-    if not subs:
         return
     payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
     dead = []
@@ -84,6 +85,13 @@ def send_push_to_user(user_name, title, body):
             dead.append(sub['id'])
     for sid in dead:
         sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
+
+
+def send_push_to_user(user_name, title, body):
+    """特定ユーザーにプッシュ通知を送信"""
+    subs = sb_request('GET', 'push_subscriptions',
+                      params=f'?user_name=eq.{urllib.parse.quote(user_name, safe="")}')
+    _push_to_subs(subs, title, body)
 
 
 def _notify_target(added_by, title, body):
@@ -108,49 +116,9 @@ def _send_daybefore(event):
                params=f'?id=eq.{event["id"]}')
 
 
-def check_and_send_notifications():
-    """通知が必要なイベントをチェックして送信（日本時間基準）"""
-    # Renderのサーバー時刻はUTCなので+9時間して日本時間にする
-    now = datetime.utcnow() + timedelta(hours=9)
-    try:
-        pending = sb_request('GET', 'events',
-                             params='?notify_enabled=eq.true')
-    except Exception as e:
-        print(f"Notification check error: {e}")
-        return
-    for event in pending:
-        date_str = event.get('date', '')
-        if not date_str:
-            continue
-        time_str = event.get('startTime') or '08:00'
-        try:
-            event_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-        except Exception:
-            continue
-        added_by = event.get('addedBy', '')
-        event_title = event.get('title', '予定')
-
-        # ① 前日の夜20時にリマインド
-        if not event.get('reminded_daybefore'):
-            remind_dt = datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)
-            remind_dt = remind_dt.replace(hour=20, minute=0)
-            if -60 <= (remind_dt - now).total_seconds() <= 60:
-                _send_daybefore(event)
-
-        # ② 当日の予定時間に通知
-        if not event.get('notified'):
-            if -60 <= (event_dt - now).total_seconds() <= 60:
-                _notify_target(added_by, f'⏰ {event_title}',
-                               f'{time_str} の予定の時間です')
-                sb_request('PATCH', 'events', {'notified': True},
-                           params=f'?id=eq.{event["id"]}')
-
-
-_weekly_sent_date = None
-
 def _send_weekly_summary():
     """翌週（明日から7日分）の予定まとめを全員に通知する"""
-    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
+    now = now_jst()
     try:
         evs = sb_request('GET', 'events', params='?order=date')
     except Exception as e:
@@ -179,47 +147,16 @@ def _send_weekly_summary():
     return True
 
 
-def check_weekly_summary():
-    """日曜の夜20時に、翌週（月〜日）の予定まとめを全員に通知"""
-    global _weekly_sent_date
-    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
-    if now.weekday() != 6:  # 日曜だけ
-        return
-    target = now.replace(hour=20, minute=0, second=0, microsecond=0)
-    if abs((now - target).total_seconds()) > 60:
-        return
-    today_str = now.strftime('%Y-%m-%d')
-    if _weekly_sent_date == today_str:  # 二重送信防止
-        return
-    _weekly_sent_date = today_str
-    _send_weekly_summary()
-
-
-def notification_scheduler():
-    """バックグラウンドで1分ごとに通知チェック"""
-    import time as time_module
-    while True:
-        try:
-            check_and_send_notifications()
-        except Exception as e:
-            print(f"Scheduler error: {e}")
-        try:
-            check_weekly_summary()
-        except Exception as e:
-            print(f"Weekly scheduler error: {e}")
-        time_module.sleep(60)
-
-
 def run_cron_notify():
     """外部cronから1日1回叩かれる想定の通知処理（ループしない）。
     ・翌日の予定があれば「前日通知」を送る
     ・その日が日曜なら「今週の予定」まとめも送る
     ・当日通知は送らない
     """
-    now = datetime.utcnow() + timedelta(hours=9)  # 日本時間
+    now = now_jst()
     tomorrow = (now + timedelta(days=1)).strftime('%Y-%m-%d')
 
-    # --- 翌日の予定について前日通知（check_and_send_notifications と同じ送信処理を再利用）---
+    # --- 翌日の予定について前日通知（時刻は見ない。cron が前日20時に叩く前提）---
     daybefore_sent = 0
     try:
         pending = sb_request('GET', 'events', params='?notify_enabled=eq.true')
@@ -252,67 +189,13 @@ def run_cron_notify():
 
 def send_push_except(exclude_user, title, body):
     """指定ユーザー以外の全購読者にプッシュ通知を送信"""
-    if not VAPID_PRIVATE_KEY:
-        return
-    try:
-        from pywebpush import webpush, WebPushException
-    except ImportError:
-        return
     all_subs = sb_request('GET', 'push_subscriptions')
-    if not all_subs:
-        return
-    subs = [s for s in all_subs if s.get('user_name') != exclude_user]
-    if not subs:
-        return
-    payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
-    dead = []
-    for sub in subs:
-        try:
-            webpush(
-                subscription_info={
-                    'endpoint': sub['endpoint'],
-                    'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
-                },
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={'sub': VAPID_SUBJECT}
-            )
-        except Exception as e:
-            print(f"Push error: {e}")
-            dead.append(sub['id'])
-    for sid in dead:
-        sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
+    _push_to_subs([x for x in all_subs if x.get('user_name') != exclude_user], title, body)
 
 
 def send_push_all(title, body):
     """全購読者にプッシュ通知を送信"""
-    if not VAPID_PRIVATE_KEY:
-        return
-    try:
-        from pywebpush import webpush, WebPushException
-    except ImportError:
-        return
-    subs = sb_request('GET', 'push_subscriptions')
-    if not subs:
-        return
-    payload = json.dumps({'title': title, 'body': body}, ensure_ascii=False)
-    dead = []
-    for sub in subs:
-        try:
-            webpush(
-                subscription_info={
-                    'endpoint': sub['endpoint'],
-                    'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
-                },
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={'sub': VAPID_SUBJECT}
-            )
-        except Exception as e:
-            print(f"Push error: {e}")
-            dead.append(sub['id'])
-    for sid in dead:
-        sb_request('DELETE', 'push_subscriptions', params=f'?id=eq.{sid}')
+    _push_to_subs(sb_request('GET', 'push_subscriptions'), title, body)
 
 
 def broadcast(message):
@@ -350,6 +233,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.send_header('Content-Length', '0')
         self.end_headers()
+
+    def check_token(self, query):
+        """?token= が NOTIFY_TOKEN と一致するか。不一致なら 403 を返して False"""
+        token = (urllib.parse.parse_qs(query).get('token') or [''])[0]
+        if not NOTIFY_TOKEN or token != NOTIFY_TOKEN:
+            self.send_json({'error': 'forbidden'}, 403)
+            return False
+        return True
 
     def read_body(self):
         length = int(self.headers.get('Content-Length', 0))
@@ -413,15 +304,15 @@ class Handler(BaseHTTPRequestHandler):
 
         # 外部cron（cron-job.org など）から叩く通知窓口。tokenが一致した時だけ実行
         if path == '/api/cron/notify':
-            qs = urllib.parse.parse_qs(parsed.query)
-            token = (qs.get('token') or [''])[0]
-            if not NOTIFY_TOKEN or token != NOTIFY_TOKEN:
-                self.send_json({'error': 'forbidden'}, 403)
+            if not self.check_token(parsed.query):
                 return
             self.send_json(run_cron_notify())
             return
 
         if path == '/api/push/test':
+            # 誰でも全員に通知を送れてしまうので、cron と同じ token で保護
+            if not self.check_token(parsed.query):
+                return
             threading.Thread(target=send_push_all,
                 args=('🔔 テスト通知', '通知の設定がうまくいっています！'), daemon=True).start()
             self.send_json({'ok': True})
@@ -600,9 +491,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    # 通知スケジューラーは無効化（Render無料枠対策で常時起動しないようにするため）。
-    # 通知は外部cronから GET /api/cron/notify を叩いて実行する。復活させないこと。
-    # threading.Thread(target=notification_scheduler, daemon=True).start()
+    # 常駐の通知スケジューラーは持たない（Render無料枠でサーバーを眠らせるため）。
+    # 通知は外部cronから GET /api/cron/notify を叩いて実行する。
     server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     import socket
     hostname = socket.gethostname()

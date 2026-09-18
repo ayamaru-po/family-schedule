@@ -177,19 +177,28 @@ async function deleteEvent(id) {
    =========================== */
 let _sseRetryCount = 0;
 
+// SSE は「画面を見ている間だけ」つなぐ。
+// 裏に回ったら切断し、再接続もしない（Render無料枠のサーバーを眠らせるため）。
+function disconnectSSE() {
+  if (sseTimer) { clearTimeout(sseTimer); sseTimer = null; }
+  if (sse) { sse.close(); sse = null; }
+}
+
 function connectSSE() {
-  if (sse) sse.close();
+  if (document.hidden) return;  // 裏画面ではつながない
+  disconnectSSE();
   try {
     sse = new EventSource(`${BASE_URL}/api/events/stream`);
     sse.onopen  = () => { _sseRetryCount = 0; setStatus(true); };
     sse.onerror = () => {
       _sseRetryCount++;
       setStatus(false);
-      sse.close();
-      // 最初は短め、徐々に間隔を広げる（最大8秒）
+      disconnectSSE();
+      if (document.hidden) return;  // 裏画面なら再接続しない（前面に戻った時につなぎ直す）
+      // 最初は短め、徐々に間隔を広げる（最大30秒）
       const delay = _sseRetryCount <= 3
         ? Math.min(1000 + _sseRetryCount * 500, 2000)
-        : Math.min(3000 + _sseRetryCount * 500, 8000);
+        : Math.min(3000 + _sseRetryCount * 2000, 30000);
       sseTimer = setTimeout(connectSSE, delay);
     };
     sse.onmessage = ({ data }) => {
@@ -208,11 +217,19 @@ function connectSSE() {
   } catch { setStatus(false); }
 }
 
-// サーバーをスリープさせないために定期ping（4分ごと）
-function startKeepAlive() {
-  setInterval(async () => {
-    try { await fetch(`${BASE_URL}/api/events`); } catch {}
-  }, 4 * 60 * 1000);
+// 画面の表示/非表示に合わせて SSE をつなぎ直す。
+// 前面に戻った時は、裏にいる間の変更を取りこぼさないよう最新を取り直す。
+function watchVisibility() {
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+      disconnectSSE();
+      setStatus(false);
+    } else {
+      _sseRetryCount = 0;
+      await fetchEvents();
+      connectSSE();
+    }
+  });
 }
 
 function setStatus(ok) {
@@ -1589,9 +1606,9 @@ async function init() {
   renderFilters();
   updateDateDisplay();
   setStatus(false);
+  watchVisibility();  // サーバー起動待ちの間も表示/非表示に反応できるよう先に登録
   await fetchEvents();
   connectSSE();
-  startKeepAlive();
   updateBellBtn();
   // ベルボタンをタップしたときだけ通知許可を求める（iOS対応）
   const bellBtn = document.getElementById('bellBtn');
