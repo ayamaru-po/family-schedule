@@ -15,8 +15,19 @@
 
 import * as webpush from "jsr:@negrel/webpush@0.5.0";
 
+// 新しい鍵方式のプロジェクトでは、秘密鍵が SUPABASE_SECRET_KEYS(JSON)で渡されることがある
+function secretKeyFromEnv(): string {
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
+  try {
+    const v = JSON.parse(raw);
+    return (Object.values(v).find((k) => typeof k === "string") as string) ?? "";
+  } catch {
+    return raw;
+  }
+}
+
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
-const DB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const DB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || secretKeyFromEnv();
 const NOTIFY_TOKEN = Deno.env.get("NOTIFY_TOKEN") ?? "";
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
